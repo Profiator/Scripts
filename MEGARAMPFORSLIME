@@ -463,7 +463,7 @@ end)
 -- AUTO-FARM
 createLabel("АВТО-ФАРМ")
 local isAutoFarmEnabled = createToggle("Включить Авто-Фарм")
-local AutoFarmInfo = createLabel("Старт: 0, 124, -1537 | Финиш: -7, 3, 2791")
+local AutoFarmInfo = createLabel("Старт: -1, 125, -1576 | Финиш: -7, 3, 2791")
 AutoFarmInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
 AutoFarmInfo.TextSize = 12
 
@@ -483,9 +483,12 @@ local function getCharRoot(forPhysics)
     if humanoid and humanoid.SeatPart then
         local seat = humanoid.SeatPart
         local vehicle = seat:FindFirstAncestorWhichIsA("Model")
+        while vehicle and vehicle.Parent and vehicle.Parent:IsA("Model") and vehicle.Parent ~= Workspace do
+            vehicle = vehicle.Parent
+        end
         if vehicle then
             if forPhysics then return seat, "Vehicle" end
-            return vehicle.PrimaryPart or seat, "Vehicle"
+            return vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart") or seat, "Vehicle", vehicle
         end
         return seat, "Seat"
     end
@@ -493,42 +496,31 @@ local function getCharRoot(forPhysics)
 end
 
 local function teleportTo(pos)
-    local root, rootType = getCharRoot(false)
+    local root, rootType, vehicleModel = getCharRoot(false)
     if root then
-        print("[MEGA RAMP LOG] Teleporting " .. tostring(rootType) .. " to " .. tostring(pos))
         -- Поднимаем координаты немного выше, чтобы машина не застревала в текстурах
         local targetCFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
         
-        if rootType == "Vehicle" then
-            local vehicle = root.Parent
-            if vehicle:IsA("Model") then
-                for _, part in ipairs(vehicle:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                        part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                    end
+        if rootType == "Vehicle" and vehicleModel then
+            for _, part in ipairs(vehicleModel:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 end
-                vehicle:PivotTo(targetCFrame)
-            else
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                root.CFrame = targetCFrame
             end
+            vehicleModel:PivotTo(targetCFrame)
         else
             root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             root.CFrame = targetCFrame
         end
-    else
-        warn("[MEGA RAMP LOG] Failed to find root part for teleport")
     end
 end
 
 local function glideTo(startPos, endPos, duration)
-    local root, rootType = getCharRoot(false)
+    local root, rootType, vehicleModel = getCharRoot(false)
     if not root then return end
     
-    print("[MEGA RAMP LOG] Gliding to simulate zone touches...")
     local startTime = tick()
     local connection
     connection = RunService.Heartbeat:Connect(function()
@@ -537,8 +529,8 @@ local function glideTo(startPos, endPos, duration)
         local currentPos = startPos:Lerp(endPos, alpha)
         
         local cframe = CFrame.new(currentPos, endPos)
-        if rootType == "Vehicle" and root.Parent and root.Parent:IsA("Model") then
-            root.Parent:PivotTo(cframe)
+        if rootType == "Vehicle" and vehicleModel then
+            vehicleModel:PivotTo(cframe)
         else
             root.CFrame = cframe
         end
@@ -563,8 +555,7 @@ task.spawn(function()
     while true do
         task.wait(0.1)
         if isAutoFarmEnabled() then
-            local startPos = Vector3.new(0, 124, -1537)
-            local jumpPos = Vector3.new(-5, 103, -1200)
+            local startPos = Vector3.new(-1, 125, -1576)
             local endPos = Vector3.new(-7, 3, 2791)
             
             if startPos and endPos then
@@ -574,62 +565,79 @@ task.spawn(function()
                 if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
-                        print("[MEGA RAMP LOG] Driving down the ramp...")
-                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
-                        local startTime = tick()
+                        local flyHeight = 250
+                        local hoverStart = Vector3.new(startPos.X, startPos.Y + flyHeight, startPos.Z)
+                        local hoverEnd = Vector3.new(endPos.X, endPos.Y + flyHeight, endPos.Z)
                         
-                        while isAutoFarmEnabled() and (tick() - startTime) < 15 do
-                            root = getCharRoot(false)
-                            if not root then break end
-                            if root.Position.Z >= jumpPos.Z then
-                                break
-                            end
+                        teleportTo(hoverStart)
+                        task.wait(0.2)
+                        
+                        if isAutoFarmEnabled() then
+                            glideTo(hoverStart, hoverEnd, 1.5)
                             task.wait(0.1)
-                        end
-                        
-                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
-                        
-                        if isAutoFarmEnabled() and root then
-                            local currentPos = root.Position
-                            glideTo(currentPos, endPos, 2.5) -- Плавный полет до 500k
                             
                             if isAutoFarmEnabled() then
-                                print("[MEGA RAMP LOG] Opening chest...")
-                                local openTime = tick()
-                                local camera = Workspace.CurrentCamera
+                                teleportTo(endPos)
+                                task.wait(0.5)
                                 
-                                -- Удерживаем позицию и максимально быстро кликаем/открываем (4 сек)
-                                while isAutoFarmEnabled() and (tick() - openTime) < 4 do
-                                    teleportTo(endPos)
+                                if isAutoFarmEnabled() then
+                                    local openTime = tick()
+                                    local camera = Workspace.CurrentCamera
                                     
-                                    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                                    VirtualUser:Button1Down(center, camera.CFrame)
-                                    task.wait(0.05)
-                                    VirtualUser:Button1Up(center, camera.CFrame)
-                                    
-                                    for _, obj in ipairs(Workspace:GetDescendants()) do
-                                        if obj:IsA("ProximityPrompt") then
-                                            local parentPart = obj.Parent
-                                            if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 50 then
-                                                if fireproximityprompt then
-                                                    fireproximityprompt(obj, 1)
-                                                    fireproximityprompt(obj, 0)
-                                                else
-                                                    obj:InputHoldBegin()
-                                                    task.wait(0.05)
-                                                    obj:InputHoldEnd()
+                                    while isAutoFarmEnabled() and (tick() - openTime) < 3.5 do
+                                        teleportTo(endPos)
+                                        
+                                        local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                                        VirtualUser:Button1Down(center, camera.CFrame)
+                                        task.wait(0.05)
+                                        VirtualUser:Button1Up(center, camera.CFrame)
+                                        
+                                        pcall(function()
+                                            if getconnections then
+                                                local function clickBtns(parent)
+                                                    for _, obj in ipairs(parent:GetDescendants()) do
+                                                        if (obj:IsA("TextButton") or obj:IsA("ImageButton")) then
+                                                            if obj:IsA("TextButton") and obj.Text and obj.Text:lower():find("открыть") then
+                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
+                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
+                                                            elseif obj:IsA("ImageButton") then
+                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
+                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                                clickBtns(LocalPlayer.PlayerGui)
+                                                clickBtns(Workspace)
+                                            end
+                                        end)
+                                        
+                                        pcall(function()
+                                            for _, obj in ipairs(Workspace:GetDescendants()) do
+                                                if obj:IsA("ProximityPrompt") then
+                                                    local parentPart = obj.Parent
+                                                    if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
+                                                        if fireproximityprompt then
+                                                            fireproximityprompt(obj, 1)
+                                                            fireproximityprompt(obj, 0)
+                                                        else
+                                                            obj:InputHoldBegin()
+                                                            task.wait(0.05)
+                                                            obj:InputHoldEnd()
+                                                        end
+                                                    end
+                                                elseif obj:IsA("ClickDetector") then
+                                                    local parentPart = obj.Parent
+                                                    if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
+                                                        if fireclickdetector then
+                                                            fireclickdetector(obj)
+                                                        end
+                                                    end
                                                 end
                                             end
-                                        elseif obj:IsA("ClickDetector") then
-                                            local parentPart = obj.Parent
-                                            if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 50 then
-                                                if fireclickdetector then
-                                                    fireclickdetector(obj)
-                                                end
-                                            end
-                                        end
+                                        end)
+                                        task.wait(0.1)
                                     end
-                                    task.wait(0.05)
                                 end
                             end
                         end
