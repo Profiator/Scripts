@@ -722,12 +722,13 @@ task.spawn(function()
             
             if startPos and endPos then
                 teleportTo(startPos)
-                task.wait(0.05)
+                task.wait(1)
                 
                 if isAutoFarmEnabled() then
                     teleportTo(carPos)
+                    task.wait(0.2)
                     local waitVehicleTime = tick()
-                    while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 3.0 do
+                    while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 1.0 do
                         local r, rType = getCharRoot(false)
                         if rType == "Vehicle" then break end
                         task.wait(0.1)
