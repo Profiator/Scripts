@@ -619,11 +619,18 @@ local function teleportTo(pos, keepExact)
         local rot = root.CFrame.Rotation
         local targetCFrame = keepExact and CFrame.new(pos) * rot or CFrame.new(pos + Vector3.new(0, 3, 0)) * rot
         
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChild("Humanoid")
+        if humanoid and humanoid.SeatPart then
+            pcall(function() humanoid.Sit = true end)
+        end
+        
         if rootType == "Vehicle" and vehicleModel then
             for _, part in ipairs(vehicleModel:GetDescendants()) do
                 if part:IsA("BasePart") then
                     part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                     part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                    pcall(function() part.CanCollide = true end)
                 end
             end
             vehicleModel:PivotTo(targetCFrame)
@@ -668,11 +675,19 @@ local function safeMove(startPos, endPos, duration, forceVel)
         local currentPos = startPos:Lerp(endPos, alpha)
         
         local cframe = CFrame.new(currentPos, currentPos + dir)
+        
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChild("Humanoid")
+        if humanoid and humanoid.SeatPart then
+            pcall(function() humanoid.Sit = true end)
+        end
+        
         if currentType == "Vehicle" and currentModel then
             for _, part in ipairs(currentModel:GetDescendants()) do
                 if part:IsA("BasePart") then
                     part.AssemblyLinearVelocity = moveVelocity
                     part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                    pcall(function() part.CanCollide = true end)
                 end
             end
             currentModel:PivotTo(cframe)
@@ -805,14 +820,34 @@ task.spawn(function()
             local endPos = Vector3.new(8, 3, 2803)
             
             if carPos and endPos then
-                -- 1. Телепортация на старт и ожидание появления машины (до 3 секунд)
+                -- 1. Телепортация на старт и поддержка устойчивости машины
                 if isAutoFarmEnabled() then
                     teleportTo(carPos)
                     task.wait(0.2)
+                    
+                    -- Попытка посадить игрока в ближайшее кресло/машину на спавне
+                    local char = LocalPlayer.Character
+                    local humanoid = char and char:FindFirstChild("Humanoid")
+                    if humanoid and not humanoid.SeatPart then
+                        pcall(function()
+                            for _, v in ipairs(Workspace:GetDescendants()) do
+                                if (v:IsA("VehicleSeat") or v:IsA("Seat")) then
+                                    if (v.Position - carPos).Magnitude < 25 then
+                                        v:Sit(humanoid)
+                                        break
+                                    end
+                                end
+                            end
+                        end)
+                    end
+                    
                     local waitVehicleTime = tick()
                     while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 3.0 do
                         local r, rType = getCharRoot(false)
-                        if rType == "Vehicle" then break end
+                        if rType == "Vehicle" then 
+                            if humanoid then pcall(function() humanoid.Sit = true end) end
+                            break 
+                        end
                         task.wait(0.05)
                     end
                 end
@@ -835,36 +870,30 @@ task.spawn(function()
                         
                         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
                         
-                        -- 3. Полет через промежуточный чекпоинт (2, 284, -363) для сбора X-бонусов и далее на финиш
+                        -- 3. Полет: одновременно подъем на высоту 284 и движение вперед к чекпоинту (2, 284, -363)
                         if isAutoFarmEnabled() then
                             root = getCharRoot(false)
                             local flyStart = root and root.Position or jumpPos
                             
                             local flyHeight = 284
-                            local hoverStart = Vector3.new(flyStart.X, flyHeight, flyStart.Z)
                             local hoverMid = Vector3.new(flyPos.X, flyHeight, flyPos.Z)
                             local hoverEnd = Vector3.new(endPos.X, flyHeight, endPos.Z)
                             
-                            -- Подъем на высоту полета
-                            safeMove(flyStart, hoverStart, 0.6)
-                            
-                            -- Полет к промежуточному чекпоинту (2, 284, -363)
-                            if isAutoFarmEnabled() then
-                                safeMove(hoverStart, hoverMid, 2.5)
-                            end
+                            -- Одновременный подъем по высоте и полет вперед к промежуточному чекпоинту
+                            safeMove(flyStart, hoverMid, 2.5)
                             
                             -- Полет от чекпоинта к зоне финиша (8, 284, 2803)
                             if isAutoFarmEnabled() then
                                 safeMove(hoverMid, hoverEnd, 2.5)
                             end
                             
-                            -- Спуск на финиш
+                            -- Плавный спуск на финиш
                             if isAutoFarmEnabled() then
                                 safeMove(hoverEnd, endPos, 0.6)
                                 teleportTo(endPos, true)
                             end
                             
-                            -- 4. Быстрое открытие сундука в течение 2 секунд и возврат на старт
+                            -- 4. Открытие сундука в течение 2 секунд и возврат
                             if isAutoFarmEnabled() then
                                 executeFinishClicker(2.0)
                                 task.wait(0.2)
