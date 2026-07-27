@@ -25,6 +25,13 @@ local T = {
         Coords = "Координаты не найдены",
         AutoFarm = "АВТО-ФАРМ",
         EnableAutoFarm = "Включить Авто-Фарм",
+        CustomClickerHeader = "НАСТРОЙКА КЛИКЕРА ФИНИША",
+        SelectClickArea = "🎯 Выбрать область/точку кликера",
+        ClickAreaSelected = "✅ Точка выбрана (%d, %d)",
+        CpsSlider = "Кликов в секунду (CPS)",
+        DelaySlider = "Задержка перед кликами (сек)",
+        DurationSlider = "Длительность кликанья (сек)",
+        ClickAreaPrompt = "НАЖМИТЕ В ЛЮБУЮ ТОЧКУ ЭКРАНА, ЧТОБЫ ВЫБРАТЬ ОБЛАСТЬ КЛИКЕРА",
         Speed = "ПОЛЕТ И СКОРОСТЬ",
         CustomSpeed = "Включить кастомную скорость",
         SpeedSlider = "Скорость (Ходьба / Машина)",
@@ -35,7 +42,7 @@ local T = {
         Confirm = "Вы уверены, что хотите закрыть скрипт?",
         Yes = "Да",
         No = "Нет",
-        AFInfo = "Старт: -1, 125, -1576 | Финиш: 8, 3, 2803",
+        AFInfo = "Старт: -1, 125, -1576 | Конец рампы: -6, 105, -1196 | Финиш: 8, 3, 2803",
         Inspector = "ИНСПЕКТОР И ЛОГИ GUI (DEBUG)",
         ScanGui = "🔍 Сканировать элементы GUI",
         CopyLog = "📋 Скопировать лог GUI в буфер"
@@ -46,6 +53,13 @@ local T = {
         Coords = "Coordinates not found",
         AutoFarm = "AUTO-FARM",
         EnableAutoFarm = "Enable Auto-Farm",
+        CustomClickerHeader = "FINISH CLICKER SETTINGS",
+        SelectClickArea = "🎯 Select Click Area/Point",
+        ClickAreaSelected = "✅ Point Selected (%d, %d)",
+        CpsSlider = "Clicks Per Second (CPS)",
+        DelaySlider = "Click Delay (sec)",
+        DurationSlider = "Click Duration (sec)",
+        ClickAreaPrompt = "CLICK ANYWHERE ON SCREEN TO SET CLICK AREA",
         Speed = "FLIGHT & SPEED",
         CustomSpeed = "Enable Custom Speed",
         SpeedSlider = "Speed (Walk / Car)",
@@ -56,7 +70,7 @@ local T = {
         Confirm = "Are you sure you want to close the script?",
         Yes = "Yes",
         No = "No",
-        AFInfo = "Start: -1, 125, -1576 | Finish: 8, 3, 2803",
+        AFInfo = "Start: -1, 125, -1576 | Ramp End: -6, 105, -1196 | Finish: 8, 3, 2803",
         Inspector = "GUI INSPECTOR & LOGS (DEBUG)",
         ScanGui = "🔍 Scan Game GUI",
         CopyLog = "📋 Copy GUI Log to Clipboard"
@@ -67,6 +81,13 @@ local T = {
         Coords = "未找到坐标",
         AutoFarm = "自动农场",
         EnableAutoFarm = "启用自动农场",
+        CustomClickerHeader = "终点区点击器设置",
+        SelectClickArea = "🎯 选择点击区域/点",
+        ClickAreaSelected = "✅ 已选择点 (%d, %d)",
+        CpsSlider = "每秒点击数 (CPS)",
+        DelaySlider = "点击延迟 (秒)",
+        DurationSlider = "点击持续时间 (秒)",
+        ClickAreaPrompt = "点击屏幕任意位置以设置点击区域",
         Speed = "飞行与速度",
         CustomSpeed = "启用自定义速度",
         SpeedSlider = "速度 (步行 / 车)",
@@ -77,7 +98,7 @@ local T = {
         Confirm = "您确定要关闭脚本吗？",
         Yes = "是",
         No = "否",
-        AFInfo = "起点: -1, 125, -1576 | 终点: 8, 3, 2803",
+        AFInfo = "起点: -1, 125, -1576 | 坡道终点: -6, 105, -1196 | 终点: 8, 3, 2803",
         Inspector = "GUI 检查器与日志 (DEBUG)",
         ScanGui = "🔍 扫描游戏 GUI",
         CopyLog = "📋 复制 GUI 日志到剪贴板"
@@ -594,6 +615,73 @@ local AutoFarmInfo = createLabel(_t("AFInfo"))
 AutoFarmInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
 AutoFarmInfo.TextSize = 12
 
+-- CUSTOM CLICKER SETTINGS
+createLabel(_t("CustomClickerHeader"))
+
+local customClickX = nil
+local customClickY = nil
+local clickMarkerFrame = nil
+
+local SelectClickAreaBtn = Instance.new("TextButton")
+SelectClickAreaBtn.Size = UDim2.new(1, 0, 0, 35)
+SelectClickAreaBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 220)
+SelectClickAreaBtn.Text = _t("SelectClickArea")
+SelectClickAreaBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectClickAreaBtn.Font = Enum.Font.GothamBold
+SelectClickAreaBtn.TextSize = 14
+SelectClickAreaBtn.Parent = Container
+Instance.new("UICorner", SelectClickAreaBtn).CornerRadius = UDim.new(0, 6)
+
+SelectClickAreaBtn.MouseButton1Click:Connect(function()
+    local OverlayGui = Instance.new("ScreenGui")
+    OverlayGui.Name = "ClickerOverlay"
+    OverlayGui.DisplayOrder = 999999
+    OverlayGui.ResetOnSpawn = false
+    OverlayGui.Parent = guiParent
+    
+    local OverlayBtn = Instance.new("TextButton")
+    OverlayBtn.Size = UDim2.new(1, 0, 1, 0)
+    OverlayBtn.Position = UDim2.new(0, 0, 0, 0)
+    OverlayBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    OverlayBtn.BackgroundTransparency = 0.6
+    OverlayBtn.Text = _t("ClickAreaPrompt")
+    OverlayBtn.TextColor3 = Color3.fromRGB(0, 255, 200)
+    OverlayBtn.Font = Enum.Font.GothamBold
+    OverlayBtn.TextSize = 18
+    OverlayBtn.TextWrapped = true
+    OverlayBtn.Parent = OverlayGui
+    
+    local conn
+    conn = UserInputService.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            customClickX = math.floor(input.Position.X)
+            customClickY = math.floor(input.Position.Y)
+            
+            SelectClickAreaBtn.Text = string.format(_t("ClickAreaSelected"), customClickX, customClickY)
+            SelectClickAreaBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+            
+            if clickMarkerFrame and clickMarkerFrame.Parent then
+                clickMarkerFrame:Destroy()
+            end
+            clickMarkerFrame = Instance.new("Frame")
+            clickMarkerFrame.Size = UDim2.new(0, 16, 0, 16)
+            clickMarkerFrame.Position = UDim2.new(0, customClickX - 8, 0, customClickY - 8)
+            clickMarkerFrame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+            clickMarkerFrame.BorderSizePixel = 0
+            clickMarkerFrame.ZIndex = 1000
+            clickMarkerFrame.Parent = ScreenGui
+            Instance.new("UICorner", clickMarkerFrame).CornerRadius = UDim.new(1, 0)
+            
+            if conn then conn:Disconnect() end
+            OverlayGui:Destroy()
+        end
+    end)
+end)
+
+local getCPS = createSlider(_t("CpsSlider"), 1, 50, 20)
+local getClickDelay = createSlider(_t("DelaySlider"), 0, 5, 0)
+local getClickDuration = createSlider(_t("DurationSlider"), 1, 10, 2)
+
 local function getCharRoot(forPhysics)
     local char = LocalPlayer.Character
     if not char then return nil, "No Character" end
@@ -711,16 +799,47 @@ end
 
 -- Aggressive Auto-Clicker & Open Button Executor for Finish
 local function executeFinishClicker(maxSeconds)
-    local startT = tick()
+    local delayVal = getClickDelay and getClickDelay() or 0
+    local durationVal = getClickDuration and getClickDuration() or (maxSeconds or 2.0)
+    local cpsVal = getCPS and getCPS() or 20
+    local clickInterval = 1 / math.clamp(cpsVal, 1, 50)
+    
+    -- Задержка перед началом кликанья
+    if delayVal > 0 then
+        local delayStart = tick()
+        while isAutoFarmEnabled() and (tick() - delayStart) < delayVal do
+            task.wait(0.05)
+        end
+    end
+    
+    local clickStart = tick()
+    local lastCustomClick = 0
     local camera = Workspace.CurrentCamera
     local vp = camera and camera.ViewportSize or Vector2.new(1000, 800)
     local centerX = vp.X / 2
     local centerY = vp.Y / 2
     
-    while isAutoFarmEnabled() and (tick() - startT) < (maxSeconds or 5.0) do
-        local btnToClick = nil
+    while isAutoFarmEnabled() and (tick() - clickStart) < durationVal do
+        local now = tick()
         
-        -- 1. Search for active "Открыть" / "Open" / "Claim" / "Spin" / "Case" buttons
+        -- 1. Выполнение клика в выбранную пользователем кастомную точку с заданным CPS
+        if customClickX and customClickY then
+            if (now - lastCustomClick) >= clickInterval then
+                lastCustomClick = now
+                pcall(function()
+                    VirtualInputManager:SendMouseButtonEvent(customClickX, customClickY, 0, true, game, 1)
+                    task.wait(0.01)
+                    VirtualInputManager:SendMouseButtonEvent(customClickX, customClickY, 0, false, game, 1)
+                    if VirtualUser then
+                        VirtualUser:Button1Down(Vector2.new(customClickX, customClickY), camera.CFrame)
+                        VirtualUser:Button1Up(Vector2.new(customClickX, customClickY), camera.CFrame)
+                    end
+                end)
+            end
+        end
+        
+        -- 2. Нажатие активных GUI кнопок ("Открыть", "Claim", "Case", etc)
+        local btnToClick = nil
         pcall(function()
             for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
                 if obj:IsA("GuiObject") and obj.Visible then
@@ -758,7 +877,7 @@ local function executeFinishClicker(maxSeconds)
             end
         end)
         
-        -- 2. Trigger nearby ProximityPrompts
+        -- 3. Trigger nearby ProximityPrompts
         pcall(function()
             for _, prompt in ipairs(Workspace:GetDescendants()) do
                 if prompt:IsA("ProximityPrompt") and prompt.Enabled then
@@ -769,7 +888,7 @@ local function executeFinishClicker(maxSeconds)
             end
         end)
         
-        -- 3. Click detected button directly
+        -- 4. Click detected button directly
         if btnToClick then
             pcall(function()
                 if getconnections and btnToClick:IsA("GuiButton") then
@@ -781,23 +900,21 @@ local function executeFinishClicker(maxSeconds)
                 local size = btnToClick.AbsoluteSize
                 local center = pos + (size / 2)
                 VirtualInputManager:SendMouseButtonEvent(center.X, center.Y + 36, 0, true, game, 1)
-                task.wait(0.02)
+                task.wait(0.01)
                 VirtualInputManager:SendMouseButtonEvent(center.X, center.Y + 36, 0, false, game, 1)
             end)
         end
         
-        -- 4. Screen Center Auto-Clicker (taps screen center to speed up chest/case animation)
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(centerX, centerY + 36, 0, true, game, 1)
-            task.wait(0.02)
-            VirtualInputManager:SendMouseButtonEvent(centerX, centerY + 36, 0, false, game, 1)
-            if VirtualUser then
-                VirtualUser:Button1Down(Vector2.new(centerX, centerY), camera.CFrame)
-                VirtualUser:Button1Up(Vector2.new(centerX, centerY), camera.CFrame)
-            end
-        end)
+        -- 5. Если кастомная точка не выбрана, кликаем в центр экрана
+        if not (customClickX and customClickY) then
+            pcall(function()
+                VirtualInputManager:SendMouseButtonEvent(centerX, centerY + 36, 0, true, game, 1)
+                task.wait(0.01)
+                VirtualInputManager:SendMouseButtonEvent(centerX, centerY + 36, 0, false, game, 1)
+            end)
+        end
         
-        -- 5. Send Keyboard triggers (E, Space, Return)
+        -- 6. Send Keyboard triggers (E, Space)
         pcall(function()
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
@@ -805,7 +922,7 @@ local function executeFinishClicker(maxSeconds)
             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
         end)
         
-        task.wait(0.05)
+        task.wait(0.02)
     end
 end
 
@@ -815,7 +932,7 @@ task.spawn(function()
         task.wait(0.1)
         if isAutoFarmEnabled() then
             local carPos = Vector3.new(0, 124, -1537)
-            local jumpPos = Vector3.new(-9, 111, -1173)
+            local jumpPos = Vector3.new(-6, 105, -1196) -- Конец трамплина
             local flyPos = Vector3.new(2, 284, -363)
             local endPos = Vector3.new(8, 3, 2803)
             
@@ -825,7 +942,6 @@ task.spawn(function()
                     teleportTo(carPos)
                     task.wait(0.2)
                     
-                    -- Попытка посадить игрока в ближайшее кресло/машину на спавне
                     local char = LocalPlayer.Character
                     local humanoid = char and char:FindFirstChild("Humanoid")
                     if humanoid and not humanoid.SeatPart then
@@ -852,48 +968,42 @@ task.spawn(function()
                     end
                 end
                 
-                -- 2. Старт с трамплина (разгон до точки -9, 111, -1173)
+                -- 2. Доезжаем до самого КОНЦА трамплина (-6, 105, -1196) без пропажи машины
                 if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
                         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
-                        local startTime = tick()
                         
-                        while isAutoFarmEnabled() and (tick() - startTime) < 3 do
-                            root = getCharRoot(false)
-                            if not root then break end
-                            if root.Position.Z >= jumpPos.Z then
-                                break
-                            end
-                            task.wait()
-                        end
+                        -- Плавное и надежное доведение машины до конца трамплина (-6, 105, -1196)
+                        safeMove(carPos, jumpPos, 0.8)
                         
                         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
                         
-                        -- 3. Полет: одновременно подъем на высоту 284 и движение вперед к чекпоинту (2, 284, -363)
+                        -- 3. Взлет С КОНЦА ТРАМПЛИНА (-6, 105, -1196):
+                        -- Начиная с -6, 105, -1196 машина одновременно поднимается до 284 и летит вперед к (2, 284, -363)
                         if isAutoFarmEnabled() then
-                            root = getCharRoot(false)
-                            local flyStart = root and root.Position or jumpPos
-                            
                             local flyHeight = 284
                             local hoverMid = Vector3.new(flyPos.X, flyHeight, flyPos.Z)
                             local hoverEnd = Vector3.new(endPos.X, flyHeight, endPos.Z)
                             
-                            -- Одновременный подъем по высоте и полет вперед к промежуточному чекпоинту
-                            safeMove(flyStart, hoverMid, 2.5)
+                            local forwardDir = (hoverMid - jumpPos).Unit
+                            local highVel = forwardDir * 500000
                             
-                            -- Полет от чекпоинта к зоне финиша (8, 284, 2803)
+                            -- Одновременный подъем и полета вперед с конца трамплина
+                            safeMove(jumpPos, hoverMid, 1.8, highVel)
+                            
+                            -- Полет к финишной зоне
                             if isAutoFarmEnabled() then
-                                safeMove(hoverMid, hoverEnd, 2.5)
+                                safeMove(hoverMid, hoverEnd, 1.8, highVel)
                             end
                             
-                            -- Плавный спуск на финиш
+                            -- Спуск на финиш
                             if isAutoFarmEnabled() then
-                                safeMove(hoverEnd, endPos, 0.6)
+                                safeMove(hoverEnd, endPos, 0.5)
                                 teleportTo(endPos, true)
                             end
                             
-                            -- 4. Открытие сундука в течение 2 секунд и возврат
+                            -- 4. Запуск кликера в финишной зоне по пользовательским настройкам
                             if isAutoFarmEnabled() then
                                 executeFinishClicker(2.0)
                                 task.wait(0.2)
