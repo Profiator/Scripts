@@ -1,57 +1,48 @@
--- [MEGA RAMP FOR SLIME] GUI Script
--- Instant Teleport to x500,000 & Equip Best
--- UI matches the Tora IsMe style
+-- Модификация с русским меню, телепортом к машине и полетом на x500,000
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Remove existing GUI if present to prevent duplicates
+-- Удаление старого GUI
 local existingGui = CoreGui:FindFirstChild("MegaRampSlimeGUI") or LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("MegaRampSlimeGUI")
 if existingGui then
     existingGui:Destroy()
 end
 
--- Create GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MegaRampSlimeGUI"
 ScreenGui.ResetOnSpawn = false
 
--- Try putting it in CoreGui to hide from the game, otherwise PlayerGui
-local success = pcall(function()
-    ScreenGui.Parent = CoreGui
-end)
-if not success then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+local success = pcall(function() ScreenGui.Parent = CoreGui end)
+if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
+-- Главный фрейм
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-MainFrame.Position = UDim2.new(0.5, -125, 0.5, -75)
-MainFrame.Size = UDim2.new(0, 260, 0, 150)
+MainFrame.Position = UDim2.new(0.5, -125, 0.5, -100)
+MainFrame.Size = UDim2.new(0, 260, 0, 220)
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.BorderSizePixel = 0
-
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 6)
 UICorner.Parent = MainFrame
 
+-- Заголовок
 local TitleFrame = Instance.new("Frame")
-TitleFrame.Name = "TitleFrame"
 TitleFrame.Parent = MainFrame
 TitleFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 TitleFrame.Size = UDim2.new(1, 0, 0, 35)
 TitleFrame.BorderSizePixel = 0
-
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 6)
 TitleCorner.Parent = TitleFrame
-
 local TitleFix = Instance.new("Frame")
 TitleFix.Parent = TitleFrame
 TitleFix.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -64,10 +55,11 @@ Title.Parent = TitleFrame
 Title.BackgroundTransparency = 1
 Title.Size = UDim2.new(1, 0, 1, 0)
 Title.Font = Enum.Font.GothamBlack
-Title.Text = "MEGA RAMP FOR SLIME v"
+Title.Text = "MEGA RAMP FOR SLIME v2"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 16
 
+-- Функция создания чекбоксов
 local function createToggle(name, yPos)
     local ToggleFrame = Instance.new("Frame")
     ToggleFrame.Parent = MainFrame
@@ -82,7 +74,7 @@ local function createToggle(name, yPos)
     Label.Font = Enum.Font.GothamBold
     Label.Text = name
     Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.TextSize = 16
+    Label.TextSize = 14
     Label.TextXAlignment = Enum.TextXAlignment.Left
 
     local Checkbox = Instance.new("TextButton")
@@ -108,57 +100,179 @@ local function createToggle(name, yPos)
         end
     end)
 
-    return ToggleFrame, function() return state end, Checkbox
+    return ToggleFrame, function() return state end
 end
 
-local instantLastZoneFrame, getInstantLastZone, instantCheckbox = createToggle("Instant LastZone", 45)
-local equipBestFrame, getEquipBest, equipCheckbox = createToggle("Equip Best", 80)
+-- Создаем элементы меню
+local _, getInstantLastZone = createToggle("Авто-Фарм x500,000", 45)
+local _, getEquipBest = createToggle("Экипировать Лучшее", 80)
+local _, getSpeed = createToggle("Скорость (Speed)", 115)
+local _, getFly = createToggle("Свободный полет (Fly)", 150)
 
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Parent = MainFrame
 CreditLabel.BackgroundTransparency = 1
-CreditLabel.Position = UDim2.new(0, 12, 0, 115)
+CreditLabel.Position = UDim2.new(0, 12, 0, 185)
 CreditLabel.Size = UDim2.new(1, -24, 0, 25)
 CreditLabel.Font = Enum.Font.GothamBold
-CreditLabel.Text = "YouTube: Tora IsMe"
+CreditLabel.Text = "YouTube: Tora IsMe | Mod AI"
 CreditLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-CreditLabel.TextSize = 16
+CreditLabel.TextSize = 12
 CreditLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 ----------------------------------------
--- LOGIC & TELEPORTATION
+-- ЛОГИКА АВТОФАРМА И ТЕЛЕПОРТА
 ----------------------------------------
-local TARGET_HEIGHT = 500000
 
-RunService.Heartbeat:Connect(function()
-    -- Logic for Instant LastZone Loop
-    if getInstantLastZone() then
-        local char = LocalPlayer.Character
-        if char then
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if root then
-                -- Continually teleports to x500,000
-                root.CFrame = CFrame.new(0, TARGET_HEIGHT, 0)
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+local targetBlock = nil
+local carSpawner = nil
+
+-- Поиск блока x500000 и спавнера
+task.spawn(function()
+    while not targetBlock or not carSpawner do
+        for _, v in pairs(Workspace:GetDescendants()) do
+            -- Ищем блок x500000 по имени или тексту на нем
+            if not targetBlock and v:IsA("BasePart") then
+                if v.Name == "x500000" or v.Name == "500000" or string.find(v.Name, "500000") then
+                    targetBlock = v
+                else
+                    for _, child in pairs(v:GetChildren()) do
+                        if child:IsA("SurfaceGui") or child:IsA("BillboardGui") then
+                            for _, lbl in pairs(child:GetDescendants()) do
+                                if lbl:IsA("TextLabel") and (string.find(lbl.Text, "500000") or string.find(lbl.Text, "500,000")) then
+                                    targetBlock = v
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            -- Ищем квадрат спавна машин (SpawnLocation или площадку рядом)
+            if not carSpawner and v:IsA("SpawnLocation") then
+                carSpawner = v
+            end
+        end
+        task.wait(2)
+    end
+end)
+
+-- Основной цикл авто-фарма
+task.spawn(function()
+    while task.wait(0.5) do
+        if getInstantLastZone() then
+            local character = LocalPlayer.Character
+            if character then
+                local root = character:FindFirstChild("HumanoidRootPart")
+                local humanoid = character:FindFirstChild("Humanoid")
+                
+                if root and humanoid then
+                    -- Если игрок не сидит в машине, телепортируем его к спавнеру машин
+                    if not humanoid.SeatPart then
+                        if carSpawner then
+                            root.CFrame = carSpawner.CFrame + Vector3.new(0, 5, 0)
+                            task.wait(1) -- Ждем пока игрок получит машину
+                        else
+                            -- Резервный телепорт далеко вперед если блок не найден
+                            if targetBlock then
+                                root.CFrame = targetBlock.CFrame + Vector3.new(0, 5, 0)
+                            else
+                                root.CFrame = CFrame.new(0, 500000, 0) 
+                            end
+                        end
+                    else
+                        -- Игрок сидит в машине, летим на x500000
+                        local vehicle = humanoid.SeatPart.Parent
+                        local vehicleRoot = vehicle.PrimaryPart or vehicle:FindFirstChild("DriveSeat") or root
+                        
+                        if targetBlock then
+                            vehicleRoot.CFrame = targetBlock.CFrame + Vector3.new(0, 10, 0)
+                        else
+                            -- Если блок x500000 не найден, летим по прямой далеко вперед
+                            vehicleRoot.CFrame = vehicleRoot.CFrame + vehicleRoot.CFrame.LookVector * 100000
+                        end
+                        
+                        task.wait(1)
+                        
+                        -- Выпрыгиваем из машины чтобы получить награду
+                        humanoid.Sit = false
+                        task.wait(2)
+                    end
+                end
             end
         end
     end
 end)
 
+-- Экипировка лучшего
 task.spawn(function()
-    -- Logic for Equip Best Loop
     while task.wait(1) do
         if getEquipBest() then
             pcall(function()
-                local ReplicatedStorage = game:GetService("ReplicatedStorage")
-                local Remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents")
-                if Remotes then
-                    local equipRemote = Remotes:FindFirstChild("EquipBest") or Remotes:FindFirstChild("PetAction")
-                    if equipRemote then
-                        equipRemote:FireServer("EquipBest")
-                    end
+                local Remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") or game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents")
+                if Remotes and Remotes:FindFirstChild("EquipBest") then
+                    Remotes.EquipBest:FireServer()
                 end
             end)
+        end
+    end
+end)
+
+-- Скорость
+RunService.RenderStepped:Connect(function()
+    if getSpeed() then
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("Humanoid") then
+            character.Humanoid.WalkSpeed = 100
+        end
+    else
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("Humanoid") then
+            if character.Humanoid.WalkSpeed == 100 then
+                character.Humanoid.WalkSpeed = 16
+            end
+        end
+    end
+end)
+
+-- Свободный полет (Fly)
+local flying = false
+local flySpeed = 100
+local bg, bv
+
+RunService.RenderStepped:Connect(function()
+    if getFly() then
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            local root = character.HumanoidRootPart
+            if not flying then
+                flying = true
+                bg = Instance.new("BodyGyro", root)
+                bg.P = 9e4
+                bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+                bg.cframe = root.CFrame
+                bv = Instance.new("BodyVelocity", root)
+                bv.velocity = Vector3.new(0, 0.1, 0)
+                bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+            end
+            
+            local camera = Workspace.CurrentCamera
+            bg.cframe = CFrame.new(camera.CFrame.p, camera.CFrame.p + camera.CFrame.lookVector)
+            
+            local moveDir = Vector3.new(0,0,0)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.lookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.lookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.rightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.rightVector end
+            
+            bv.velocity = moveDir * flySpeed
+        end
+    else
+        if flying then
+            flying = false
+            if bg then bg:Destroy() end
+            if bv then bv:Destroy() end
         end
     end
 end)
