@@ -35,7 +35,10 @@ local T = {
         Confirm = "Вы уверены, что хотите закрыть скрипт?",
         Yes = "Да",
         No = "Нет",
-        AFInfo = "Старт: -1, 125, -1576 | Финиш: 8, 3, 2803"
+        AFInfo = "Старт: -1, 125, -1576 | Финиш: 8, 3, 2803",
+        Inspector = "ИНСПЕКТОР И ЛОГИ GUI (DEBUG)",
+        ScanGui = "🔍 Сканировать элементы GUI",
+        CopyLog = "📋 Скопировать лог GUI в буфер"
     },
     EN = {
         Title = "MEGA RAMP FOR SLIME",
@@ -53,7 +56,10 @@ local T = {
         Confirm = "Are you sure you want to close the script?",
         Yes = "Yes",
         No = "No",
-        AFInfo = "Start: -1, 125, -1576 | Finish: 8, 3, 2803"
+        AFInfo = "Start: -1, 125, -1576 | Finish: 8, 3, 2803",
+        Inspector = "GUI INSPECTOR & LOGS (DEBUG)",
+        ScanGui = "🔍 Scan Game GUI",
+        CopyLog = "📋 Copy GUI Log to Clipboard"
     },
     ZH = {
         Title = "MEGA RAMP FOR SLIME",
@@ -71,7 +77,10 @@ local T = {
         Confirm = "您确定要关闭脚本吗？",
         Yes = "是",
         No = "否",
-        AFInfo = "起点: -1, 125, -1576 | 终点: 8, 3, 2803"
+        AFInfo = "起点: -1, 125, -1576 | 终点: 8, 3, 2803",
+        Inspector = "GUI 检查器与日志 (DEBUG)",
+        ScanGui = "🔍 扫描游戏 GUI",
+        CopyLog = "📋 复制 GUI 日志到剪贴板"
     }
 }
 local curLang = "RU"
@@ -505,40 +514,6 @@ local function createSlider(text, min, max, default)
     return function() return value end
 end
 
-local function createInput(text, placeholder)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 40)
-    Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    Frame.Parent = Container
-    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0, 180, 1, 0)
-    Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = text
-    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.TextSize = 14
-    Label.Font = Enum.Font.Gotham
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Frame
-    
-    local TextBox = Instance.new("TextBox")
-    TextBox.Size = UDim2.new(1, -200, 0, 30)
-    TextBox.Position = UDim2.new(0, 190, 0, 5)
-    TextBox.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TextBox.PlaceholderText = placeholder
-    TextBox.Text = ""
-    TextBox.Font = Enum.Font.Gotham
-    TextBox.TextSize = 14
-    TextBox.ClearTextOnFocus = false
-    TextBox.Parent = Frame
-    Instance.new("UICorner", TextBox).CornerRadius = UDim.new(0, 4)
-    
-    return TextBox
-end
-
 -- === CONTENT ===
 
 -- PROFILE
@@ -619,15 +594,6 @@ local AutoFarmInfo = createLabel(_t("AFInfo"))
 AutoFarmInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
 AutoFarmInfo.TextSize = 12
 
-local function parseCoords(str)
-    if not str or str == "" then return nil end
-    local x, y, z = str:match("([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)")
-    if x and y and z then
-        return Vector3.new(tonumber(x), tonumber(y), tonumber(z))
-    end
-    return nil
-end
-
 local function getCharRoot(forPhysics)
     local char = LocalPlayer.Character
     if not char then return nil, "No Character" end
@@ -650,7 +616,6 @@ end
 local function teleportTo(pos, keepExact)
     local root, rootType, vehicleModel = getCharRoot(false)
     if root then
-        -- Поднимаем координаты немного выше, чтобы машина не застревала в текстурах
         local rot = root.CFrame.Rotation
         local targetCFrame = keepExact and CFrame.new(pos) * rot or CFrame.new(pos + Vector3.new(0, 3, 0)) * rot
         
@@ -670,14 +635,18 @@ local function teleportTo(pos, keepExact)
     end
 end
 
-local function safeMove(startPos, endPos, duration)
+-- Fast movement helper with speed velocity force (500,000 max speed)
+local function safeMove(startPos, endPos, duration, forceVel)
     local root, rootType, vehicleModel = getCharRoot(false)
     if not root then return end
     
     local startTime = tick()
     local connection
-    local moveVelocity = (endPos - startPos) / duration
     local finished = false
+    
+    local flatDir = Vector3.new(endPos.X - startPos.X, 0, endPos.Z - startPos.Z)
+    local dir = flatDir.Magnitude > 0.001 and flatDir.Unit or Vector3.new(0, 0, 1)
+    local moveVelocity = forceVel or (dir * 500000)
     
     connection = RunService.Heartbeat:Connect(function()
         if not isAutoFarmEnabled() then
@@ -697,9 +666,6 @@ local function safeMove(startPos, endPos, duration)
         local alpha = math.clamp(elapsed / duration, 0, 1)
         local currentPos = startPos:Lerp(endPos, alpha)
         
-        local flatDir = Vector3.new(endPos.X - startPos.X, 0, endPos.Z - startPos.Z)
-        local dir = flatDir.Magnitude > 0.001 and flatDir.Unit or Vector3.new(0, 0, 1)
-        -- Чтобы машина не кувыркалась, смотрим строго прямо
         local cframe = CFrame.new(currentPos, currentPos + dir)
         if currentType == "Vehicle" and currentModel then
             for _, part in ipairs(currentModel:GetDescendants()) do
@@ -722,11 +688,112 @@ local function safeMove(startPos, endPos, duration)
     end)
     
     while not finished and isAutoFarmEnabled() do
-        task.wait(0.1)
+        task.wait(0.01)
     end
     if connection then connection:Disconnect() end
 end
 
+-- Aggressive Auto-Clicker & Open Button Executor for Finish
+local function executeFinishClicker(maxSeconds)
+    local startT = tick()
+    local camera = Workspace.CurrentCamera
+    local vp = camera and camera.ViewportSize or Vector2.new(1000, 800)
+    local centerX = vp.X / 2
+    local centerY = vp.Y / 2
+    
+    while isAutoFarmEnabled() and (tick() - startT) < (maxSeconds or 5.0) do
+        local btnToClick = nil
+        
+        -- 1. Search for active "Открыть" / "Open" / "Claim" / "Spin" / "Case" buttons
+        pcall(function()
+            for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                if obj:IsA("GuiObject") and obj.Visible then
+                    local txt = ""
+                    if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                        txt = (obj.Text or ""):lower()
+                    end
+                    local name = obj.Name:lower()
+                    
+                    if txt:find("открыть") or txt:find("open") or txt:find("claim") or txt:find("забрать") or txt:find("spin") or txt:find("крутить") or txt:find("skip") or txt:find("пропустить") or txt:find("кейсы") or txt:find("case") or txt:find("box") or txt:find("chest") or txt:find("нажмите") or txt:find("click") or txt:find("next") or txt:find("далее") or name:find("open") or name:find("claim") or name:find("case") then
+                        local isVis = true
+                        local curr = obj
+                        while curr and curr:IsA("GuiObject") do
+                            if not curr.Visible then isVis = false break end
+                            curr = curr.Parent
+                        end
+                        if isVis then
+                            if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+                                btnToClick = obj
+                                break
+                            else
+                                local p = obj.Parent
+                                while p and p:IsA("GuiObject") do
+                                    if p:IsA("TextButton") or p:IsA("ImageButton") then
+                                        btnToClick = p
+                                        break
+                                    end
+                                    p = p.Parent
+                                end
+                                if btnToClick then break end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        
+        -- 2. Trigger nearby ProximityPrompts
+        pcall(function()
+            for _, prompt in ipairs(Workspace:GetDescendants()) do
+                if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                    if fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    end
+                end
+            end
+        end)
+        
+        -- 3. Click detected button directly
+        if btnToClick then
+            pcall(function()
+                if getconnections and btnToClick:IsA("GuiButton") then
+                    for _, conn in ipairs(getconnections(btnToClick.MouseButton1Down)) do conn:Fire() end
+                    for _, conn in ipairs(getconnections(btnToClick.MouseButton1Click)) do conn:Fire() end
+                    for _, conn in ipairs(getconnections(btnToClick.Activated)) do conn:Fire() end
+                end
+                local pos = btnToClick.AbsolutePosition
+                local size = btnToClick.AbsoluteSize
+                local center = pos + (size / 2)
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y + 36, 0, true, game, 1)
+                task.wait(0.02)
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y + 36, 0, false, game, 1)
+            end)
+        end
+        
+        -- 4. Screen Center Auto-Clicker (taps screen center to speed up chest/case animation)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(centerX, centerY + 36, 0, true, game, 1)
+            task.wait(0.02)
+            VirtualInputManager:SendMouseButtonEvent(centerX, centerY + 36, 0, false, game, 1)
+            if VirtualUser then
+                VirtualUser:Button1Down(Vector2.new(centerX, centerY), camera.CFrame)
+                VirtualUser:Button1Up(Vector2.new(centerX, centerY), camera.CFrame)
+            end
+        end)
+        
+        -- 5. Send Keyboard triggers (E, Space, Return)
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+        end)
+        
+        task.wait(0.05)
+    end
+end
+
+-- Main Auto Farm Loop
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -741,20 +808,21 @@ task.spawn(function()
                     teleportTo(carPos)
                     task.wait(0.2)
                     local waitVehicleTime = tick()
-                    while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 1.0 do
+                    while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 0.8 do
                         local r, rType = getCharRoot(false)
                         if rType == "Vehicle" then break end
-                        task.wait(0.1)
+                        task.wait(0.05)
                     end
                 end
                 
                 if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
+                        -- Drive off the ramp
                         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
                         local startTime = tick()
                         
-                        while isAutoFarmEnabled() and (tick() - startTime) < 5 do
+                        while isAutoFarmEnabled() and (tick() - startTime) < 3 do
                             root = getCharRoot(false)
                             if not root then break end
                             if root.Position.Z >= jumpPos.Z then
@@ -771,109 +839,33 @@ task.spawn(function()
                             
                             local flyHeight = 284
                             local hoverStart = Vector3.new(flyStart.X, flyHeight, flyStart.Z)
-                            local hoverMid = Vector3.new(flyPos.X, flyHeight, flyPos.Z)
                             local hoverEnd = Vector3.new(endPos.X, flyHeight, endPos.Z)
                             
-                            -- Прямой полет на безопасной высоте
-                            safeMove(flyStart, hoverStart, 1.0)
+                            -- Fast ascension to flight height (0.1s)
+                            safeMove(flyStart, hoverStart, 0.1, Vector3.new(0, 3000, 0))
+                            
+                            -- Super-fast forward flight to finish Z with 500,000 velocity (0.25s)
                             if isAutoFarmEnabled() then
-                                safeMove(hoverStart, hoverMid, 3.0)
-                            end
-                            if isAutoFarmEnabled() then
-                                safeMove(hoverMid, hoverEnd, 3.0)
-                            end
-                            if isAutoFarmEnabled() then
-                                safeMove(hoverEnd, endPos, 2.5)
+                                safeMove(hoverStart, hoverEnd, 0.25, Vector3.new(0, -100, 500000))
                             end
                             
+                            -- Fast descent directly to finish (0.1s)
                             if isAutoFarmEnabled() then
-                                local waitYTime = tick()
-                                while isAutoFarmEnabled() and (tick() - waitYTime) < 5.0 do
-                                    local r = getCharRoot(false)
-                                    if r and r.Position.Y <= 15 then
-                                        break
-                                    end
-                                    task.wait(0.1)
-                                end
-                                task.wait(1.0) -- Ждем 1 секунду после приземления
-                                
-                                teleportTo(endPos, false)
-                                
-                                if isAutoFarmEnabled() then
-                                    local waitTimeout = tick()
-                                    local hasSeenButton = false
-                                    while isAutoFarmEnabled() do
-                                        local btn = nil
-                                        pcall(function()
-                                            for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                                                if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                                                    if obj.Text and (obj.Text:lower():find("открыть") or obj.Text:lower():find("open")) then
-                                                        local isVisible = true
-                                                        local curr = obj
-                                                        while curr and curr:IsA("GuiObject") do
-                                                            if not curr.Visible then isVisible = false break end
-                                                            curr = curr.Parent
-                                                        end
-                                                        if isVisible then
-                                                            if obj:IsA("TextButton") then
-                                                                btn = obj
-                                                                break
-                                                            end
-                                                            local p = obj.Parent
-                                                            while p and p:IsA("GuiObject") do
-                                                                if p:IsA("TextButton") or p:IsA("ImageButton") then
-                                                                    btn = p
-                                                                    break
-                                                                end
-                                                                p = p.Parent
-                                                            end
-                                                            if not btn then btn = obj end
-                                                            break
-                                                        end
-                                                    end
-                                                end
-                                            end
-                                        end)
-                                        
-                                        if btn then
-                                            hasSeenButton = true
-                                            waitTimeout = tick()
-                                            pcall(function()
-                                                if getconnections and btn:IsA("GuiButton") then
-                                                    for _, conn in ipairs(getconnections(btn.MouseButton1Down)) do conn:Fire() end
-                                                    for _, conn in ipairs(getconnections(btn.MouseButton1Click)) do conn:Fire() end
-                                                end
-                                                if btn:IsA("GuiObject") then
-                                                    local pos = btn.AbsolutePosition
-                                                    local size = btn.AbsoluteSize
-                                                    local center = pos + (size / 2)
-                                                    VirtualInputManager:SendMouseButtonEvent(center.X, center.Y + 36, 0, true, game, 1)
-                                                    task.wait(0.05)
-                                                    VirtualInputManager:SendMouseButtonEvent(center.X, center.Y + 36, 0, false, game, 1)
-                                                end
-                                            end)
-                                            task.wait(0.5)
-                                        else
-                                            if hasSeenButton then
-                                                break
-                                            end
-                                            if (tick() - waitTimeout) > 5.0 then
-                                                break
-                                            end
-                                            teleportTo(endPos, false)
-                                            task.wait(0.2)
-                                        end
-                                    end
-                                    
-                                    task.wait(2.0)
-                                end
-                                end
+                                safeMove(hoverEnd, endPos, 0.1, Vector3.new(0, -3000, 500000))
+                                teleportTo(endPos, true)
+                            end
+                            
+                            -- Run finish clicker to rapidly trigger open buttons and skip case animations
+                            if isAutoFarmEnabled() then
+                                executeFinishClicker(3.5)
+                                task.wait(0.3)
                             end
                         end
                     end
                 end
             end
         end
+    end
 end)
 
 
@@ -899,7 +891,7 @@ RunService.Heartbeat:Connect(function()
                 humanoid.WalkSpeed = 16
                 wasWalkSpeedChanged = false
                 if humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
-                    humanoid.SeatPart.MaxSpeed = 50 -- default approx speed
+                    humanoid.SeatPart.MaxSpeed = 50
                 end
             end
         end
@@ -911,7 +903,6 @@ local flyBV, flyBG
 local function startFly(root)
     if flying then return end
     flying = true
-    print("[MEGA RAMP LOG] Starting fly for " .. tostring(root.Name))
     
     flyBG = Instance.new("BodyGyro")
     flyBG.P = 9e5
@@ -934,7 +925,7 @@ end
 
 RunService.RenderStepped:Connect(function()
     if isFlyEnabled() then
-        local root = getCharRoot(true) -- True for physics BodyVelocity
+        local root = getCharRoot(true)
         if root then
             if not flying or (flyBG and flyBG.Parent ~= root) then
                 stopFly()
@@ -977,5 +968,110 @@ LocalPlayer.Idled:Connect(function()
         VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
         task.wait(1)
         VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+    end
+end)
+
+-- GUI INSPECTOR & LOGS TAB
+createLabel(_t("Inspector"))
+
+local inspectorLogText = "Логи GUI еще не собраны. Нажмите кнопку ниже для сканирования элементов игры."
+
+local ScanBtn = Instance.new("TextButton")
+ScanBtn.Size = UDim2.new(1, 0, 0, 35)
+ScanBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 220)
+ScanBtn.Text = _t("ScanGui")
+ScanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ScanBtn.Font = Enum.Font.GothamBold
+ScanBtn.TextSize = 14
+ScanBtn.Parent = Container
+Instance.new("UICorner", ScanBtn).CornerRadius = UDim.new(0, 6)
+
+local LogFrame = Instance.new("Frame")
+LogFrame.Size = UDim2.new(1, 0, 0, 120)
+LogFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+LogFrame.Parent = Container
+Instance.new("UICorner", LogFrame).CornerRadius = UDim.new(0, 6)
+
+local LogScroll = Instance.new("ScrollingFrame")
+LogScroll.Size = UDim2.new(1, -10, 1, -10)
+LogScroll.Position = UDim2.new(0, 5, 0, 5)
+LogScroll.BackgroundTransparency = 1
+LogScroll.ScrollBarThickness = 4
+LogScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+LogScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+LogScroll.Parent = LogFrame
+
+local LogLabel = Instance.new("TextLabel")
+LogLabel.Size = UDim2.new(1, -10, 0, 0)
+LogLabel.AutomaticSize = Enum.AutomaticSize.Y
+LogLabel.BackgroundTransparency = 1
+LogLabel.Text = inspectorLogText
+LogLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+LogLabel.Font = Enum.Font.Code
+LogLabel.TextSize = 11
+LogLabel.TextXAlignment = Enum.TextXAlignment.Left
+LogLabel.TextYAlignment = Enum.TextYAlignment.Top
+LogLabel.TextWrapped = true
+LogLabel.Parent = LogScroll
+
+local CopyLogBtn = Instance.new("TextButton")
+CopyLogBtn.Size = UDim2.new(1, 0, 0, 35)
+CopyLogBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+CopyLogBtn.Text = _t("CopyLog")
+CopyLogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CopyLogBtn.Font = Enum.Font.GothamBold
+CopyLogBtn.TextSize = 14
+CopyLogBtn.Parent = Container
+Instance.new("UICorner", CopyLogBtn).CornerRadius = UDim.new(0, 6)
+
+ScanBtn.MouseButton1Click:Connect(function()
+    local logLines = {}
+    table.insert(logLines, "=== [MEGA RAMP GUI INSPECTOR LOG] ===")
+    table.insert(logLines, "Player: " .. LocalPlayer.Name)
+    table.insert(logLines, "Time: " .. os.date("%H:%M:%S"))
+    table.insert(logLines, "")
+    
+    pcall(function()
+        table.insert(logLines, "-- PlayerGui Visible Elements --")
+        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+            if obj:IsA("GuiObject") then
+                local txt = ""
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                    txt = obj.Text or ""
+                end
+                if obj.Visible or txt ~= "" then
+                    table.insert(logLines, string.format("[%s] Path: %s | Text: '%s' | Vis: %s", obj.ClassName, obj:GetFullName(), txt, tostring(obj.Visible)))
+                end
+            end
+        end
+    end)
+    
+    pcall(function()
+        table.insert(logLines, "")
+        table.insert(logLines, "-- Workspace Prompts & Remote Events --")
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then
+                table.insert(logLines, string.format("[Prompt] Path: %s | ActionText: '%s' | ObjectText: '%s' | Enabled: %s", obj:GetFullName(), obj.ActionText, obj.ObjectText, tostring(obj.Enabled)))
+            elseif obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                table.insert(logLines, string.format("[%s] %s", obj.ClassName, obj:GetFullName()))
+            end
+        end
+    end)
+    
+    inspectorLogText = table.concat(logLines, "\n")
+    LogLabel.Text = inspectorLogText
+    ScanBtn.Text = "✅ Сканирование завершено!"
+    task.delay(1.5, function() ScanBtn.Text = _t("ScanGui") end)
+end)
+
+CopyLogBtn.MouseButton1Click:Connect(function()
+    if setclipboard then
+        setclipboard(inspectorLogText)
+        CopyLogBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        CopyLogBtn.Text = "✅ Лог скопирован в буфер!"
+        task.delay(1.5, function()
+            CopyLogBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+            CopyLogBtn.Text = _t("CopyLog")
+        end)
     end
 end)
