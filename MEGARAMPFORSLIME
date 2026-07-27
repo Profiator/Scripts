@@ -805,21 +805,22 @@ task.spawn(function()
             local endPos = Vector3.new(8, 3, 2803)
             
             if carPos and endPos then
+                -- 1. Телепортация на старт и ожидание появления машины (до 3 секунд)
                 if isAutoFarmEnabled() then
                     teleportTo(carPos)
                     task.wait(0.2)
                     local waitVehicleTime = tick()
-                    while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 0.8 do
+                    while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 3.0 do
                         local r, rType = getCharRoot(false)
                         if rType == "Vehicle" then break end
                         task.wait(0.05)
                     end
                 end
                 
+                -- 2. Старт с трамплина (разгон до точки -9, 111, -1173)
                 if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
-                        -- Drive off the ramp
                         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
                         local startTime = tick()
                         
@@ -834,6 +835,7 @@ task.spawn(function()
                         
                         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
                         
+                        -- 3. Полет через промежуточный чекпоинт (2, 284, -363) для сбора X-бонусов и далее на финиш
                         if isAutoFarmEnabled() then
                             root = getCharRoot(false)
                             local flyStart = root and root.Position or jumpPos
@@ -843,27 +845,29 @@ task.spawn(function()
                             local hoverMid = Vector3.new(flyPos.X, flyHeight, flyPos.Z)
                             local hoverEnd = Vector3.new(endPos.X, flyHeight, endPos.Z)
                             
-                            -- 1. Быстрый подъем на высоту полета (0.4 сек)
-                            safeMove(flyStart, hoverStart, 0.4)
+                            -- Подъем на высоту полета
+                            safeMove(flyStart, hoverStart, 0.6)
                             
-                            -- 2. Плавный полет вперед для сбора всех X-множителей
+                            -- Полет к промежуточному чекпоинту (2, 284, -363)
                             if isAutoFarmEnabled() then
-                                safeMove(hoverStart, hoverMid, 2.0)
-                            end
-                            if isAutoFarmEnabled() then
-                                safeMove(hoverMid, hoverEnd, 2.0)
+                                safeMove(hoverStart, hoverMid, 2.5)
                             end
                             
-                            -- 3. Быстрый спуск прямо на финиш (0.4 сек)
+                            -- Полет от чекпоинта к зоне финиша (8, 284, 2803)
                             if isAutoFarmEnabled() then
-                                safeMove(hoverEnd, endPos, 0.4)
+                                safeMove(hoverMid, hoverEnd, 2.5)
+                            end
+                            
+                            -- Спуск на финиш
+                            if isAutoFarmEnabled() then
+                                safeMove(hoverEnd, endPos, 0.6)
                                 teleportTo(endPos, true)
                             end
                             
-                            -- Run finish clicker to rapidly trigger open buttons and skip case animations
+                            -- 4. Быстрое открытие сундука в течение 2 секунд и возврат на старт
                             if isAutoFarmEnabled() then
-                                executeFinishClicker(3.5)
-                                task.wait(0.3)
+                                executeFinishClicker(2.0)
+                                task.wait(0.2)
                             end
                         end
                     end
