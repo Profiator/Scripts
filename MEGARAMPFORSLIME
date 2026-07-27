@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
@@ -40,10 +41,23 @@ pcall(function()
 
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
-        if not checkcaller() and (method == "FireServer" or method == "InvokeServer") then
-            local name = tostring(self):lower()
-            if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") then
-                return nil
+        if not checkcaller() then
+            if method == "FireServer" or method == "InvokeServer" then
+                local name = tostring(self):lower()
+                if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") then
+                    return nil
+                end
+            elseif method == "FindFirstChild" or method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
+                local args = {...}
+                if type(args[1]) == "string" then
+                    local n = tostring(args[1])
+                    if n == "BodyVelocity" or n == "BodyGyro" then
+                        local lp = game:GetService("Players").LocalPlayer
+                        if lp and lp.Character and self:IsDescendantOf(lp.Character) then
+                            return nil
+                        end
+                    end
+                end
             end
         end
         return oldNamecall(self, ...)
@@ -522,7 +536,7 @@ local function glideTo(startPos, endPos, duration)
         local alpha = math.clamp(elapsed / duration, 0, 1)
         local currentPos = startPos:Lerp(endPos, alpha)
         
-        local cframe = CFrame.new(currentPos + Vector3.new(0, 5, 0), endPos)
+        local cframe = CFrame.new(currentPos, endPos)
         if rootType == "Vehicle" and root.Parent and root.Parent:IsA("Model") then
             root.Parent:PivotTo(cframe)
         else
@@ -550,6 +564,7 @@ task.spawn(function()
         task.wait(0.1)
         if isAutoFarmEnabled() then
             local startPos = Vector3.new(0, 124, -1537)
+            local jumpPos = Vector3.new(-5, 103, -1200)
             local endPos = Vector3.new(-7, 3, 2791)
             
             if startPos and endPos then
@@ -557,13 +572,34 @@ task.spawn(function()
                 task.wait(1.5)
                 
                 if isAutoFarmEnabled() then
-                    glideTo(startPos, endPos, 2.5) -- Плавный полет на 2.5 секунды для сбора зон
-                    task.wait(0.5)
-                    
-                    if isAutoFarmEnabled() then
-                        VirtualUser:Button1Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-                        task.wait(3)
-                        VirtualUser:Button1Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+                    local root = getCharRoot(false)
+                    if root then
+                        print("[MEGA RAMP LOG] Driving down the ramp...")
+                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+                        local startTime = tick()
+                        
+                        while isAutoFarmEnabled() and (tick() - startTime) < 15 do
+                            root = getCharRoot(false)
+                            if not root then break end
+                            if root.Position.Z >= jumpPos.Z then
+                                break
+                            end
+                            task.wait(0.1)
+                        end
+                        
+                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+                        
+                        if isAutoFarmEnabled() and root then
+                            local currentPos = root.Position
+                            glideTo(currentPos, endPos, 2.5) -- Плавный полет до 500k
+                            task.wait(0.5)
+                            
+                            if isAutoFarmEnabled() then
+                                VirtualUser:Button1Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+                                task.wait(3)
+                                VirtualUser:Button1Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+                            end
+                        end
                     end
                 end
             end
