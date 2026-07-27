@@ -128,6 +128,52 @@ end
 langEvent.Event:Wait()
 LangFrame:Destroy()
 
+-- Show Loading Screen
+local LoadFrame = Instance.new("Frame")
+LoadFrame.Size = UDim2.new(0, 400, 0, 250)
+LoadFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
+LoadFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+LoadFrame.BorderSizePixel = 0
+LoadFrame.Parent = ScreenGui
+Instance.new("UICorner", LoadFrame).CornerRadius = UDim.new(0, 12)
+
+local ArcTitle = Instance.new("TextLabel")
+ArcTitle.Size = UDim2.new(1, 0, 0, 50)
+ArcTitle.Position = UDim2.new(0, 0, 0.5, -50)
+ArcTitle.BackgroundTransparency = 1
+ArcTitle.Text = "ARC2PLAY ROBLOX SCRIPTS"
+ArcTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+ArcTitle.Font = Enum.Font.GothamBlack
+ArcTitle.TextSize = 24
+ArcTitle.Parent = LoadFrame
+
+local LoadBarBG = Instance.new("Frame")
+LoadBarBG.Size = UDim2.new(0.8, 0, 0, 10)
+LoadBarBG.Position = UDim2.new(0.1, 0, 0.5, 20)
+LoadBarBG.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+LoadBarBG.Parent = LoadFrame
+Instance.new("UICorner", LoadBarBG).CornerRadius = UDim.new(1, 0)
+
+local LoadBarFill = Instance.new("Frame")
+LoadBarFill.Size = UDim2.new(0, 0, 1, 0)
+LoadBarFill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+LoadBarFill.Parent = LoadBarBG
+Instance.new("UICorner", LoadBarFill).CornerRadius = UDim.new(1, 0)
+
+local LoadText = Instance.new("TextLabel")
+LoadText.Size = UDim2.new(1, 0, 0, 30)
+LoadText.Position = UDim2.new(0, 0, 0.5, 40)
+LoadText.BackgroundTransparency = 1
+LoadText.Text = "Loading..."
+LoadText.TextColor3 = Color3.fromRGB(200, 200, 200)
+LoadText.Font = Enum.Font.Gotham
+LoadText.TextSize = 14
+LoadText.Parent = LoadFrame
+
+LoadBarFill:TweenSize(UDim2.new(1, 0, 1, 0), "Out", "Linear", 2, true)
+task.wait(2)
+LoadFrame:Destroy()
+
 -- Window Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
@@ -601,11 +647,11 @@ local function getCharRoot(forPhysics)
     return char:FindFirstChild("HumanoidRootPart"), "Character"
 end
 
-local function teleportTo(pos)
+local function teleportTo(pos, keepExact)
     local root, rootType, vehicleModel = getCharRoot(false)
     if root then
         -- Поднимаем координаты немного выше, чтобы машина не застревала в текстурах
-        local targetCFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
+        local targetCFrame = keepExact and CFrame.new(pos) or CFrame.new(pos + Vector3.new(0, 3, 0))
         
         if rootType == "Vehicle" and vehicleModel then
             for _, part in ipairs(vehicleModel:GetDescendants()) do
@@ -623,7 +669,7 @@ local function teleportTo(pos)
     end
 end
 
-local function glideTo(startPos, endPos, duration)
+local function safeMove(startPos, endPos, duration)
     local root, rootType, vehicleModel = getCharRoot(false)
     if not root then return end
     
@@ -634,18 +680,21 @@ local function glideTo(startPos, endPos, duration)
         local alpha = math.clamp(elapsed / duration, 0, 1)
         local currentPos = startPos:Lerp(endPos, alpha)
         
-        local cframe = CFrame.new(currentPos, endPos)
+        local flatDir = Vector3.new(endPos.X - startPos.X, 0, endPos.Z - startPos.Z)
+        local dir = flatDir.Magnitude > 0.001 and flatDir.Unit or Vector3.new(0, 0, 1)
+        local cframe = CFrame.new(currentPos, currentPos + dir)
         if rootType == "Vehicle" and vehicleModel then
+            for _, part in ipairs(vehicleModel:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                end
+            end
             vehicleModel:PivotTo(cframe)
         else
             root.CFrame = cframe
-        end
-        
-        -- Добавляем физический импульс, чтобы зоны точно засчитывали касание
-        local physRoot = getCharRoot(true)
-        if physRoot then
-            physRoot.AssemblyLinearVelocity = cframe.LookVector * ((startPos - endPos).Magnitude / duration)
-            physRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         end
         
         if alpha >= 1 then
@@ -655,19 +704,6 @@ local function glideTo(startPos, endPos, duration)
     
     task.wait(duration + 0.1)
     if connection then connection:Disconnect() end
-    
-    local endRoot, endRootType, endVehicle = getCharRoot(false)
-    if endRootType == "Vehicle" and endVehicle then
-        for _, part in ipairs(endVehicle:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            end
-        end
-    elseif endRoot then
-        endRoot.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        endRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    end
 end
 
 task.spawn(function()
@@ -714,13 +750,13 @@ task.spawn(function()
                             task.wait(0.2)
                             
                             if isAutoFarmEnabled() then
-                                glideTo(hoverStart, hoverEnd, 1.5)
-                                task.wait(0.2)
+                                safeMove(hoverStart, hoverEnd, 1.5)
+                                task.wait(0.1)
                                 
                                 if isAutoFarmEnabled() then
-                                    teleportTo(endPos)
+                                    safeMove(hoverEnd, endPos, 0.5)
                                     task.wait(0.1)
-                                    teleportTo(endPos) -- double teleport for physics stability
+                                    teleportTo(endPos, true)
                                     task.wait(0.5)
                                     
                                     if isAutoFarmEnabled() then
@@ -728,7 +764,7 @@ task.spawn(function()
                                         local camera = Workspace.CurrentCamera
                                         
                                         while isAutoFarmEnabled() and (tick() - openTime) < 3.5 do
-                                            teleportTo(endPos)
+                                            teleportTo(endPos, true)
                                             
                                             local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
                                             VirtualUser:Button1Down(center, camera.CFrame)
@@ -887,59 +923,11 @@ end)
 -- OTHER
 createLabel(_t("Other"))
 local isAntiAfkEnabled = createToggle(_t("AntiAfk"))
-local isInvisibleEnabled = createToggle(_t("Invis"))
 
 LocalPlayer.Idled:Connect(function()
     if isAntiAfkEnabled() then
         VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
         task.wait(1)
         VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-    end
-end)
-
-local wasInvisible = false
-local originalTransparencies = {}
-RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    if char then
-        local invis = isInvisibleEnabled()
-        if invis and not wasInvisible then
-            originalTransparencies = {}
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    originalTransparencies[part] = part.Transparency
-                    part.Transparency = 1
-                elseif part:IsA("Decal") then
-                    originalTransparencies[part] = part.Transparency
-                    part.Transparency = 1
-                end
-            end
-            wasInvisible = true
-        elseif not invis and wasInvisible then
-            for part, origTrans in pairs(originalTransparencies) do
-                if part and part.Parent then
-                    part.Transparency = origTrans
-                end
-            end
-            originalTransparencies = {}
-            wasInvisible = false
-        end
-        
-        -- Поддержание инвиза (если спавнятся новые парты/одежда/эффекты)
-        if invis and wasInvisible then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Transparency ~= 1 then
-                    if not originalTransparencies[part] then
-                        originalTransparencies[part] = part.Transparency
-                    end
-                    part.Transparency = 1
-                elseif part:IsA("Decal") and part.Transparency ~= 1 then
-                    if not originalTransparencies[part] then
-                        originalTransparencies[part] = part.Transparency
-                    end
-                    part.Transparency = 1
-                end
-            end
-        end
     end
 end)
