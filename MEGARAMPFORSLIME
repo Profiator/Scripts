@@ -757,13 +757,14 @@ task.spawn(function()
                             local flyStart = root and root.Position or jumpPos
                             
                             -- Прямой полет через промежуточную точку
-                            safeMove(flyStart, flyPos, 0.7)
+                            safeMove(flyStart, flyPos, 2.0)
                             if isAutoFarmEnabled() then
-                                safeMove(flyPos, endPos, 0.8)
+                                safeMove(flyPos, endPos, 2.0)
                             end
                             
                             if isAutoFarmEnabled() then
-                                teleportTo(endPos, true)
+                                teleportTo(endPos, false)
+                                task.wait(0.5) -- Ждем приземления
                                 
                                 if isAutoFarmEnabled() then
                                     local openTime = tick()
@@ -776,7 +777,7 @@ task.spawn(function()
                                                 return
                                             end
                                             
-                                            teleportTo(endPos, true)
+                                            teleportTo(endPos, false)
                                             
                                             local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
                                             -- Fire multiple clicks per frame for extreme speed (100+ times per second)
