@@ -1,3 +1,4 @@
+-- [MEGA RAMP FOR SLIME] GUI Script
 -- Модификация с русским меню, телепортом к машине и полетом на x500,000
 
 local Players = game:GetService("Players")
@@ -5,6 +6,7 @@ local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -25,11 +27,12 @@ if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-MainFrame.Position = UDim2.new(0.5, -125, 0.5, -100)
-MainFrame.Size = UDim2.new(0, 260, 0, 220)
+MainFrame.Position = UDim2.new(0.5, -125, 0.5, -127)
+MainFrame.Size = UDim2.new(0, 260, 0, 255)
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.BorderSizePixel = 0
+
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 6)
 UICorner.Parent = MainFrame
@@ -40,9 +43,11 @@ TitleFrame.Parent = MainFrame
 TitleFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 TitleFrame.Size = UDim2.new(1, 0, 0, 35)
 TitleFrame.BorderSizePixel = 0
+
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 6)
 TitleCorner.Parent = TitleFrame
+
 local TitleFix = Instance.new("Frame")
 TitleFix.Parent = TitleFrame
 TitleFix.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -55,7 +60,7 @@ Title.Parent = TitleFrame
 Title.BackgroundTransparency = 1
 Title.Size = UDim2.new(1, 0, 1, 0)
 Title.Font = Enum.Font.GothamBlack
-Title.Text = "MEGA RAMP FOR SLIME v2"
+Title.Text = "MEGA RAMP FOR SLIME v3"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 16
 
@@ -103,16 +108,91 @@ local function createToggle(name, yPos)
     return ToggleFrame, function() return state end
 end
 
+-- Функция создания ползунка
+local function createSlider(name, yPos, min, max, default)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Parent = MainFrame
+    SliderFrame.BackgroundTransparency = 1
+    SliderFrame.Position = UDim2.new(0, 12, 0, yPos)
+    SliderFrame.Size = UDim2.new(1, -24, 0, 30)
+
+    local Label = Instance.new("TextLabel")
+    Label.Parent = SliderFrame
+    Label.BackgroundTransparency = 1
+    Label.Size = UDim2.new(0.5, 0, 1, 0)
+    Label.Font = Enum.Font.GothamBold
+    Label.Text = name .. ": " .. default
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = 13
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local SliderBG = Instance.new("Frame")
+    SliderBG.Parent = SliderFrame
+    SliderBG.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    SliderBG.Position = UDim2.new(0.55, 0, 0.5, -4)
+    SliderBG.Size = UDim2.new(0.45, 0, 0, 8)
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(1, 0)
+    UICorner.Parent = SliderBG
+
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Parent = SliderBG
+    SliderFill.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    SliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    local UICorner2 = Instance.new("UICorner")
+    UICorner2.CornerRadius = UDim.new(1, 0)
+    UICorner2.Parent = SliderFill
+
+    local SliderBtn = Instance.new("TextButton")
+    SliderBtn.Parent = SliderFill
+    SliderBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    SliderBtn.Position = UDim2.new(1, -6, 0.5, -6)
+    SliderBtn.Size = UDim2.new(0, 12, 0, 12)
+    SliderBtn.Text = ""
+    local UICorner3 = Instance.new("UICorner")
+    UICorner3.CornerRadius = UDim.new(1, 0)
+    UICorner3.Parent = SliderBtn
+
+    local value = default
+    local dragging = false
+
+    local function updateSlider(input)
+        local pos = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
+        SliderFill.Size = UDim2.new(pos, 0, 1, 0)
+        value = math.floor(min + (max - min) * pos)
+        Label.Text = name .. ": " .. value
+    end
+
+    SliderBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateSlider(input)
+        end
+    end)
+
+    return function() return value end
+end
+
 -- Создаем элементы меню
 local _, getInstantLastZone = createToggle("Авто-Фарм x500,000", 45)
-local _, getEquipBest = createToggle("Экипировать Лучшее", 80)
-local _, getSpeed = createToggle("Скорость (Speed)", 115)
-local _, getFly = createToggle("Свободный полет (Fly)", 150)
+local _, getAntiAfk = createToggle("Анти-АФК", 80)
+local _, getFly = createToggle("Свободный полет (Fly)", 115)
+local _, getSpeed = createToggle("Скорость (Speed)", 150)
+local getSpeedValue = createSlider("Скорость", 185, 16, 500, 100)
 
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Parent = MainFrame
 CreditLabel.BackgroundTransparency = 1
-CreditLabel.Position = UDim2.new(0, 12, 0, 185)
+CreditLabel.Position = UDim2.new(0, 12, 0, 220)
 CreditLabel.Size = UDim2.new(1, -24, 0, 25)
 CreditLabel.Font = Enum.Font.GothamBold
 CreditLabel.Text = "YouTube: Tora IsMe | Mod AI"
@@ -121,44 +201,57 @@ CreditLabel.TextSize = 12
 CreditLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 ----------------------------------------
--- ЛОГИКА АВТОФАРМА И ТЕЛЕПОРТА
+-- ЛОГИКА
 ----------------------------------------
+
+-- Анти-АФК
+LocalPlayer.Idled:Connect(function()
+    if getAntiAfk() then
+        VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+    end
+end)
 
 local targetBlock = nil
 local carSpawner = nil
 
--- Поиск блока x500000 и спавнера
+-- Поиск блока x500000 и спавнера машин
 task.spawn(function()
-    while not targetBlock or not carSpawner do
-        for _, v in pairs(Workspace:GetDescendants()) do
-            -- Ищем блок x500000 по имени или тексту на нем
-            if not targetBlock and v:IsA("BasePart") then
-                if v.Name == "x500000" or v.Name == "500000" or string.find(v.Name, "500000") then
-                    targetBlock = v
-                else
-                    for _, child in pairs(v:GetChildren()) do
-                        if child:IsA("SurfaceGui") or child:IsA("BillboardGui") then
-                            for _, lbl in pairs(child:GetDescendants()) do
-                                if lbl:IsA("TextLabel") and (string.find(lbl.Text, "500000") or string.find(lbl.Text, "500,000")) then
-                                    targetBlock = v
-                                    break
-                                end
-                            end
+    while task.wait(2) do
+        if not targetBlock then
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    local n = string.lower(v.Name)
+                    if string.find(n, "500000") or string.find(n, "500,000") or string.find(n, "lastzone") then
+                        targetBlock = v
+                        break
+                    end
+                elseif v:IsA("TextLabel") or v:IsA("TextButton") then
+                    local t = string.lower(v.Text)
+                    if string.find(t, "500000") or string.find(t, "500,000") then
+                        local gui = v:FindFirstAncestorWhichIsA("SurfaceGui")
+                        if gui and gui.Adornee then
+                            targetBlock = gui.Adornee
+                            break
+                        elseif gui and gui.Parent and gui.Parent:IsA("BasePart") then
+                            targetBlock = gui.Parent
+                            break
                         end
                     end
                 end
             end
-            
-            -- Ищем квадрат спавна машин (SpawnLocation или площадку рядом)
-            if not carSpawner and v:IsA("SpawnLocation") then
-                carSpawner = v
+        end
+        if not carSpawner then
+            local spawnLoc = Workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+            if spawnLoc then
+                carSpawner = spawnLoc
             end
         end
-        task.wait(2)
     end
 end)
 
--- Основной цикл авто-фарма
+-- Авто-Фарм
 task.spawn(function()
     while task.wait(0.5) do
         if getInstantLastZone() then
@@ -168,36 +261,32 @@ task.spawn(function()
                 local humanoid = character:FindFirstChild("Humanoid")
                 
                 if root and humanoid then
-                    -- Если игрок не сидит в машине, телепортируем его к спавнеру машин
                     if not humanoid.SeatPart then
+                        -- Телепорт к спавнеру машин
                         if carSpawner then
-                            root.CFrame = carSpawner.CFrame + Vector3.new(0, 5, 0)
-                            task.wait(1) -- Ждем пока игрок получит машину
-                        else
-                            -- Резервный телепорт далеко вперед если блок не найден
-                            if targetBlock then
-                                root.CFrame = targetBlock.CFrame + Vector3.new(0, 5, 0)
-                            else
-                                root.CFrame = CFrame.new(0, 500000, 0) 
-                            end
+                            root.CFrame = carSpawner.CFrame + Vector3.new(0, 3, 0)
+                            task.wait(0.5)
+                            -- Двигаем персонажа вперед, чтобы взять машину
+                            humanoid:MoveTo(root.Position + root.CFrame.LookVector * 15)
+                            task.wait(1)
                         end
                     else
-                        -- Игрок сидит в машине, летим на x500000
+                        -- Игрок в машине, летим на x500000
                         local vehicle = humanoid.SeatPart.Parent
-                        local vehicleRoot = vehicle.PrimaryPart or vehicle:FindFirstChild("DriveSeat") or root
+                        local vehicleRoot = vehicle.PrimaryPart or humanoid.SeatPart
                         
                         if targetBlock then
-                            vehicleRoot.CFrame = targetBlock.CFrame + Vector3.new(0, 10, 0)
+                            vehicleRoot.CFrame = targetBlock.CFrame + Vector3.new(0, 5, 0)
+                            -- Замораживаем физику, чтобы машина не улетела
+                            vehicleRoot.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                            vehicleRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                         else
-                            -- Если блок x500000 не найден, летим по прямой далеко вперед
                             vehicleRoot.CFrame = vehicleRoot.CFrame + vehicleRoot.CFrame.LookVector * 100000
                         end
                         
+                        task.wait(0.5)
+                        humanoid.Sit = false -- Выпрыгиваем для получения награды
                         task.wait(1)
-                        
-                        -- Выпрыгиваем из машины чтобы получить награду
-                        humanoid.Sit = false
-                        task.wait(2)
                     end
                 end
             end
@@ -205,32 +294,20 @@ task.spawn(function()
     end
 end)
 
--- Экипировка лучшего
-task.spawn(function()
-    while task.wait(1) do
-        if getEquipBest() then
-            pcall(function()
-                local Remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") or game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents")
-                if Remotes and Remotes:FindFirstChild("EquipBest") then
-                    Remotes.EquipBest:FireServer()
-                end
-            end)
-        end
-    end
-end)
-
 -- Скорость
+local wasSpeedEnabled = false
 RunService.RenderStepped:Connect(function()
-    if getSpeed() then
-        local character = LocalPlayer.Character
-        if character and character:FindFirstChild("Humanoid") then
-            character.Humanoid.WalkSpeed = 100
-        end
-    else
-        local character = LocalPlayer.Character
-        if character and character:FindFirstChild("Humanoid") then
-            if character.Humanoid.WalkSpeed == 100 then
-                character.Humanoid.WalkSpeed = 16
+    local isSpeedEnabled = getSpeed()
+    local char = LocalPlayer.Character
+    if char then
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            if isSpeedEnabled then
+                humanoid.WalkSpeed = getSpeedValue()
+                wasSpeedEnabled = true
+            elseif wasSpeedEnabled then
+                humanoid.WalkSpeed = 16
+                wasSpeedEnabled = false
             end
         end
     end
@@ -238,41 +315,71 @@ end)
 
 -- Свободный полет (Fly)
 local flying = false
-local flySpeed = 100
 local bg, bv
+
+local function getFlyPart()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local humanoid = char:FindFirstChild("Humanoid")
+    
+    -- Если игрок сидит в машине, берем машину для полета!
+    if humanoid and humanoid.SeatPart then
+        local vehicle = humanoid.SeatPart.Parent
+        return vehicle.PrimaryPart or humanoid.SeatPart
+    end
+    
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+local function startFly(flyPart)
+    if flying then return end
+    flying = true
+    
+    bg = Instance.new("BodyGyro")
+    bg.P = 9e4
+    bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bg.cframe = flyPart.CFrame
+    bg.Parent = flyPart
+    
+    bv = Instance.new("BodyVelocity")
+    bv.velocity = Vector3.new(0, 0, 0)
+    bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+    bv.Parent = flyPart
+end
+
+local function stopFly()
+    if not flying then return end
+    flying = false
+    if bg then bg:Destroy(); bg = nil end
+    if bv then bv:Destroy(); bv = nil end
+end
 
 RunService.RenderStepped:Connect(function()
     if getFly() then
-        local character = LocalPlayer.Character
-        if character and character:FindFirstChild("HumanoidRootPart") then
-            local root = character.HumanoidRootPart
-            if not flying then
-                flying = true
-                bg = Instance.new("BodyGyro", root)
-                bg.P = 9e4
-                bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-                bg.cframe = root.CFrame
-                bv = Instance.new("BodyVelocity", root)
-                bv.velocity = Vector3.new(0, 0.1, 0)
-                bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+        local flyPart = getFlyPart()
+        if flyPart then
+            -- Перезапускаем полет, если игрок сел или вышел из машины
+            if not flying or (bg and bg.Parent ~= flyPart) then
+                stopFly()
+                startFly(flyPart)
             end
             
-            local camera = Workspace.CurrentCamera
-            bg.cframe = CFrame.new(camera.CFrame.p, camera.CFrame.p + camera.CFrame.lookVector)
-            
-            local moveDir = Vector3.new(0,0,0)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.lookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.lookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.rightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.rightVector end
-            
-            bv.velocity = moveDir * flySpeed
+            if flying and bg and bv then
+                local camera = Workspace.CurrentCamera
+                bg.cframe = CFrame.new(camera.CFrame.p, camera.CFrame.p + camera.CFrame.lookVector)
+                
+                local moveDir = Vector3.new(0,0,0)
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.lookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.lookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.rightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.rightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+                
+                bv.velocity = moveDir.Magnitude > 0 and moveDir.Unit * getSpeedValue() or Vector3.new(0, 0, 0)
+            end
         end
     else
-        if flying then
-            flying = false
-            if bg then bg:Destroy() end
-            if bv then bv:Destroy() end
-        end
+        stopFly()
     end
 end)
