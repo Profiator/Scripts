@@ -756,15 +756,35 @@ task.spawn(function()
                             root = getCharRoot(false)
                             local flyStart = root and root.Position or jumpPos
                             
-                            -- Прямой полет через промежуточную точку
-                            safeMove(flyStart, flyPos, 2.0)
+                            local flyHeight = 284
+                            local hoverStart = Vector3.new(flyStart.X, flyHeight, flyStart.Z)
+                            local hoverMid = Vector3.new(flyPos.X, flyHeight, flyPos.Z)
+                            local hoverEnd = Vector3.new(endPos.X, flyHeight, endPos.Z)
+                            
+                            -- Прямой полет на безопасной высоте
+                            safeMove(flyStart, hoverStart, 1.0)
                             if isAutoFarmEnabled() then
-                                safeMove(flyPos, endPos, 2.0)
+                                safeMove(hoverStart, hoverMid, 3.0)
+                            end
+                            if isAutoFarmEnabled() then
+                                safeMove(hoverMid, hoverEnd, 3.0)
+                            end
+                            if isAutoFarmEnabled() then
+                                safeMove(hoverEnd, endPos, 2.5)
                             end
                             
                             if isAutoFarmEnabled() then
+                                local waitYTime = tick()
+                                while isAutoFarmEnabled() and (tick() - waitYTime) < 5.0 do
+                                    local r = getCharRoot(false)
+                                    if r and r.Position.Y <= 15 then
+                                        break
+                                    end
+                                    task.wait(0.1)
+                                end
+                                task.wait(1.0) -- Ждем 1 секунду после приземления
+                                
                                 teleportTo(endPos, false)
-                                task.wait(0.5) -- Ждем приземления
                                 
                                 if isAutoFarmEnabled() then
                                     local openTime = tick()
