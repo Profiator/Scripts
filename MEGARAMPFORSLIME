@@ -71,9 +71,12 @@ Container.BackgroundTransparency = 1
 Container.Position = UDim2.new(0, 15, 0, 50)
 Container.Size = UDim2.new(1, -30, 1, -60)
 Container.ScrollBarThickness = 4
-Container.UIListLayout = Instance.new("UIListLayout")
-Container.UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-Container.UIListLayout.Padding = UDim.new(0, 10)
+Container.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Container.CanvasSize = UDim2.new(0, 0, 0, 0)
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = Container
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 10)
 
 -- Helpers
 local function createButton(text, parent)
@@ -298,6 +301,20 @@ local getSpeed = createSlider("Скорость полета/ходьбы", 16, 
 
 createLabel("ДРУГОЕ", Container)
 local isAntiAfkEnabled = createToggle("Анти-АФК", Container)
+local isInvisibleEnabled = createToggle("Невидимость (Invisibility)", Container)
+
+createLabel("ПРОФИЛЬ", Container)
+local ProfileInfo = createLabel("Ник: -", Container)
+local CoordsInfo = createLabel("Позиция: 0, 0, 0", Container)
+
+-- Update Profile Info
+RunService.RenderStepped:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        ProfileInfo.Text = "Игрок: " .. LocalPlayer.Name
+        local pos = LocalPlayer.Character.HumanoidRootPart.Position
+        CoordsInfo.Text = string.format("Позиция: X: %d | Y: %d | Z: %d", math.floor(pos.X), math.floor(pos.Y), math.floor(pos.Z))
+    end
+end)
 
 -- LOGIC
 
@@ -353,6 +370,36 @@ LocalPlayer.Idled:Connect(function()
         VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
         task.wait(1)
         VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+    end
+end)
+
+-- Невидимость (локально скрывает персонажа, в некоторых режимах работает для всех)
+local wasInvisible = false
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    if char then
+        local invis = isInvisibleEnabled()
+        if invis then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.Transparency = 1
+                elseif part:IsA("Decal") then
+                    part.Transparency = 1
+                end
+            end
+            wasInvisible = true
+        elseif wasInvisible then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    if part.Name == "Head" or part.Name == "Torso" or part.Name:find("Leg") or part.Name:find("Arm") then
+                        part.Transparency = 0
+                    end
+                elseif part:IsA("Decal") then
+                    part.Transparency = 0
+                end
+            end
+            wasInvisible = false
+        end
     end
 end)
 
