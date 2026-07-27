@@ -635,7 +635,7 @@ local function teleportTo(pos, keepExact)
     end
 end
 
--- Fast movement helper with speed velocity force (500,000 max speed)
+-- Fast movement helper
 local function safeMove(startPos, endPos, duration, forceVel)
     local root, rootType, vehicleModel = getCharRoot(false)
     if not root then return end
@@ -646,7 +646,8 @@ local function safeMove(startPos, endPos, duration, forceVel)
     
     local flatDir = Vector3.new(endPos.X - startPos.X, 0, endPos.Z - startPos.Z)
     local dir = flatDir.Magnitude > 0.001 and flatDir.Unit or Vector3.new(0, 0, 1)
-    local moveVelocity = forceVel or (dir * 500000)
+    local calculatedVel = (endPos - startPos) / math.max(duration, 0.01)
+    local moveVelocity = forceVel or calculatedVel
     
     connection = RunService.Heartbeat:Connect(function()
         if not isAutoFarmEnabled() then
@@ -839,19 +840,23 @@ task.spawn(function()
                             
                             local flyHeight = 284
                             local hoverStart = Vector3.new(flyStart.X, flyHeight, flyStart.Z)
+                            local hoverMid = Vector3.new(flyPos.X, flyHeight, flyPos.Z)
                             local hoverEnd = Vector3.new(endPos.X, flyHeight, endPos.Z)
                             
-                            -- Fast ascension to flight height (0.1s)
-                            safeMove(flyStart, hoverStart, 0.1, Vector3.new(0, 3000, 0))
+                            -- 1. Быстрый подъем на высоту полета (0.4 сек)
+                            safeMove(flyStart, hoverStart, 0.4)
                             
-                            -- Super-fast forward flight to finish Z with 500,000 velocity (0.25s)
+                            -- 2. Плавный полет вперед для сбора всех X-множителей
                             if isAutoFarmEnabled() then
-                                safeMove(hoverStart, hoverEnd, 0.25, Vector3.new(0, -100, 500000))
+                                safeMove(hoverStart, hoverMid, 2.0)
+                            end
+                            if isAutoFarmEnabled() then
+                                safeMove(hoverMid, hoverEnd, 2.0)
                             end
                             
-                            -- Fast descent directly to finish (0.1s)
+                            -- 3. Быстрый спуск прямо на финиш (0.4 сек)
                             if isAutoFarmEnabled() then
-                                safeMove(hoverEnd, endPos, 0.1, Vector3.new(0, -3000, 500000))
+                                safeMove(hoverEnd, endPos, 0.4)
                                 teleportTo(endPos, true)
                             end
                             
