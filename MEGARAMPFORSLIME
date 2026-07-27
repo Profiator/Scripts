@@ -714,16 +714,12 @@ task.spawn(function()
     while true do
         task.wait(0.1)
         if isAutoFarmEnabled() then
-            local startPos = Vector3.new(-1, 125, -1576)
             local carPos = Vector3.new(0, 124, -1537)
             local jumpPos = Vector3.new(-9, 111, -1173)
             local flyPos = Vector3.new(2, 284, -363)
             local endPos = Vector3.new(8, 3, 2803)
             
-            if startPos and endPos then
-                teleportTo(startPos)
-                task.wait(1)
-                
+            if carPos and endPos then
                 if isAutoFarmEnabled() then
                     teleportTo(carPos)
                     task.wait(0.2)
@@ -787,73 +783,35 @@ task.spawn(function()
                                 teleportTo(endPos, false)
                                 
                                 if isAutoFarmEnabled() then
-                                    local openTime = tick()
-                                    local camera = Workspace.CurrentCamera
-                                        
-                                        local connection
-                                        connection = RunService.RenderStepped:Connect(function()
-                                            if not isAutoFarmEnabled() or (tick() - openTime) >= 2.0 then
-                                                if connection then connection:Disconnect() end
-                                                return
-                                            end
-                                            
-                                            teleportTo(endPos, false)
-                                            
-                                            local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                                            -- Fire multiple clicks per frame for extreme speed (100+ times per second)
-                                            for i = 1, 5 do
-                                                VirtualUser:Button1Down(center, camera.CFrame)
-                                                VirtualUser:Button1Up(center, camera.CFrame)
-                                            end
-                                            
-                                            pcall(function()
-                                                if getconnections then
-                                                    local function clickBtns(parent)
-                                                        for _, obj in ipairs(parent:GetDescendants()) do
-                                                            if (obj:IsA("TextButton") or obj:IsA("ImageButton")) then
-                                                                if obj:IsA("TextButton") and obj.Text and obj.Text:lower():find("открыть") then
-                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
-                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
-                                                                elseif obj:IsA("ImageButton") then
-                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
-                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
-                                                                end
-                                                            end
-                                                        end
-                                                    end
-                                                    clickBtns(LocalPlayer.PlayerGui)
-                                                    clickBtns(Workspace)
-                                                end
-                                            end)
-                                            
-                                            pcall(function()
-                                                for _, obj in ipairs(Workspace:GetDescendants()) do
-                                                    if obj:IsA("ProximityPrompt") then
-                                                        local parentPart = obj.Parent
-                                                        if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
-                                                            if fireproximityprompt then
-                                                                fireproximityprompt(obj, 1)
-                                                                fireproximityprompt(obj, 0)
-                                                            else
-                                                                obj:InputHoldBegin()
-                                                                obj:InputHoldEnd()
-                                                            end
-                                                        end
-                                                    elseif obj:IsA("ClickDetector") then
-                                                        local parentPart = obj.Parent
-                                                        if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
-                                                            if fireclickdetector then
-                                                                fireclickdetector(obj)
-                                                            end
-                                                        end
+                                    local waitTimeout = tick()
+                                    while isAutoFarmEnabled() and (tick() - waitTimeout) < 10.0 do
+                                        local btnFound = false
+                                        pcall(function()
+                                            if getconnections then
+                                                for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                                                    if obj:IsA("TextButton") and obj.Text and (obj.Text:lower():find("открыть") or obj.Text:lower():find("open")) then
+                                                        btnFound = true
+                                                        for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
+                                                        for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
+                                                    elseif obj:IsA("ImageButton") and (obj.Name:lower():find("открыть") or obj.Name:lower():find("open")) then
+                                                        btnFound = true
+                                                        for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
+                                                        for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
                                                     end
                                                 end
-                                            end)
+                                            end
                                         end)
                                         
-                                        task.wait(2.0)
-                                        if connection then connection:Disconnect() end
+                                        if not btnFound then
+                                            break
+                                        end
+                                        
+                                        teleportTo(endPos, false)
+                                        task.wait(0.1)
                                     end
+                                    
+                                    task.wait(2.0)
+                                end
                                 end
                             end
                         end
