@@ -17,10 +17,116 @@ pcall(function()
     if gethui then guiParent = gethui() end
 end)
 
+
+local T = {
+    RU = {
+        Title = "MEGA RAMP FOR SLIME",
+        Profile = "ПРОФИЛЬ ИГРОКА",
+        Coords = "Координаты не найдены",
+        AutoFarm = "АВТО-ФАРМ",
+        EnableAutoFarm = "Включить Авто-Фарм",
+        Speed = "ПОЛЕТ И СКОРОСТЬ",
+        CustomSpeed = "Включить кастомную скорость",
+        SpeedSlider = "Скорость (Ходьба / Машина)",
+        Fly = "Свободный полет (Fly)",
+        Other = "ДРУГОЕ",
+        AntiAfk = "Анти-АФК",
+        Invis = "Невидимость (Invisibility)",
+        Confirm = "Вы уверены, что хотите закрыть скрипт?",
+        Yes = "Да",
+        No = "Нет",
+        AFInfo = "Старт: -1, 125, -1576 | Финиш: 8, 3, 2803"
+    },
+    EN = {
+        Title = "MEGA RAMP FOR SLIME",
+        Profile = "PLAYER PROFILE",
+        Coords = "Coordinates not found",
+        AutoFarm = "AUTO-FARM",
+        EnableAutoFarm = "Enable Auto-Farm",
+        Speed = "FLIGHT & SPEED",
+        CustomSpeed = "Enable Custom Speed",
+        SpeedSlider = "Speed (Walk / Car)",
+        Fly = "Free Fly",
+        Other = "OTHER",
+        AntiAfk = "Anti-AFK",
+        Invis = "Invisibility",
+        Confirm = "Are you sure you want to close the script?",
+        Yes = "Yes",
+        No = "No",
+        AFInfo = "Start: -1, 125, -1576 | Finish: 8, 3, 2803"
+    },
+    ZH = {
+        Title = "MEGA RAMP FOR SLIME",
+        Profile = "玩家资料",
+        Coords = "未找到坐标",
+        AutoFarm = "自动农场",
+        EnableAutoFarm = "启用自动农场",
+        Speed = "飞行与速度",
+        CustomSpeed = "启用自定义速度",
+        SpeedSlider = "速度 (步行 / 车)",
+        Fly = "自由飞行",
+        Other = "其他",
+        AntiAfk = "防挂机",
+        Invis = "隐形",
+        Confirm = "您确定要关闭脚本吗？",
+        Yes = "是",
+        No = "否",
+        AFInfo = "起点: -1, 125, -1576 | 终点: 8, 3, 2803"
+    }
+}
+local curLang = "RU"
+local function _t(k) return T[curLang] and T[curLang][k] or k end
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MegaRamp_" .. tostring(math.random(1000,9999))
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
+
+local langEvent = Instance.new("BindableEvent")
+
+local LangFrame = Instance.new("Frame")
+LangFrame.Size = UDim2.new(0, 300, 0, 200)
+LangFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+LangFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+LangFrame.BorderSizePixel = 0
+LangFrame.Parent = ScreenGui
+Instance.new("UICorner", LangFrame).CornerRadius = UDim.new(0, 10)
+
+local LangTitle = Instance.new("TextLabel")
+LangTitle.Size = UDim2.new(1, 0, 0, 40)
+LangTitle.BackgroundTransparency = 1
+LangTitle.Text = "Select Language / Выберите язык / 选择语言"
+LangTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+LangTitle.Font = Enum.Font.GothamBold
+LangTitle.TextSize = 14
+LangTitle.Parent = LangFrame
+
+local langs = {
+    {code = "RU", name = "Русский", y = 50},
+    {code = "EN", name = "English", y = 95},
+    {code = "ZH", name = "中文", y = 140}
+}
+
+for _, l in ipairs(langs) do
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(0, 200, 0, 35)
+    b.Position = UDim2.new(0.5, -100, 0, l.y)
+    b.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    b.Text = l.name
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 14
+    b.Parent = LangFrame
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    
+    b.MouseButton1Click:Connect(function()
+        curLang = l.code
+        langEvent:Fire()
+    end)
+end
+
+langEvent.Event:Wait()
+LangFrame:Destroy()
 
 -- Window Frame
 local MainFrame = Instance.new("Frame")
@@ -99,7 +205,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "MEGA RAMP FOR SLIME"
+Title.Text = _t("Title")
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 18
 Title.Font = Enum.Font.GothamBold
@@ -195,7 +301,7 @@ local ConfirmLabel = Instance.new("TextLabel")
 ConfirmLabel.Size = UDim2.new(1, 0, 0, 50)
 ConfirmLabel.Position = UDim2.new(0, 0, 0, 15)
 ConfirmLabel.BackgroundTransparency = 1
-ConfirmLabel.Text = "Вы уверены, что хотите закрыть скрипт?"
+ConfirmLabel.Text = _t("Confirm")
 ConfirmLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 ConfirmLabel.Font = Enum.Font.Gotham
 ConfirmLabel.TextSize = 14
@@ -207,7 +313,7 @@ local YesBtn = Instance.new("TextButton")
 YesBtn.Size = UDim2.new(0, 90, 0, 35)
 YesBtn.Position = UDim2.new(0, 30, 0, 75)
 YesBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-YesBtn.Text = "Да"
+YesBtn.Text = _t("Yes")
 YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 YesBtn.Font = Enum.Font.GothamBold
 YesBtn.TextSize = 14
@@ -219,7 +325,7 @@ local NoBtn = Instance.new("TextButton")
 NoBtn.Size = UDim2.new(0, 90, 0, 35)
 NoBtn.Position = UDim2.new(1, -120, 0, 75)
 NoBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-NoBtn.Text = "Нет"
+NoBtn.Text = _t("No")
 NoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 NoBtn.Font = Enum.Font.GothamBold
 NoBtn.TextSize = 14
@@ -390,7 +496,7 @@ end
 -- === CONTENT ===
 
 -- PROFILE
-createLabel("ПРОФИЛЬ ИГРОКА")
+createLabel(_t("Profile"))
 local ProfileFrame = Instance.new("Frame")
 ProfileFrame.Size = UDim2.new(1, 0, 0, 70)
 ProfileFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -443,7 +549,7 @@ RunService.RenderStepped:Connect(function()
         local pos = char.HumanoidRootPart.Position
         CoordLabel.Text = string.format("X: %d, Y: %d, Z: %d", math.floor(pos.X), math.floor(pos.Y), math.floor(pos.Z))
     else
-        CoordLabel.Text = "Координаты не найдены"
+        CoordLabel.Text = _t("Coords")
     end
 end)
 
@@ -461,9 +567,9 @@ CopyCoordsBtn.MouseButton1Click:Connect(function()
 end)
 
 -- AUTO-FARM
-createLabel("АВТО-ФАРМ")
-local isAutoFarmEnabled = createToggle("Включить Авто-Фарм")
-local AutoFarmInfo = createLabel("Старт: -1, 125, -1576 | Финиш: -7, 3, 2791")
+createLabel(_t("AutoFarm"))
+local isAutoFarmEnabled = createToggle(_t("EnableAutoFarm"))
+local AutoFarmInfo = createLabel(_t("AFInfo"))
 AutoFarmInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
 AutoFarmInfo.TextSize = 12
 
@@ -556,87 +662,110 @@ task.spawn(function()
         task.wait(0.1)
         if isAutoFarmEnabled() then
             local startPos = Vector3.new(-1, 125, -1576)
-            local endPos = Vector3.new(-7, 3, 2791)
+            local carPos = Vector3.new(0, 124, -1537)
+            local jumpPos = Vector3.new(-6, 105, -1196)
+            local endPos = Vector3.new(8, 3, 2803)
             
             if startPos and endPos then
                 teleportTo(startPos)
                 task.wait(1.5)
                 
                 if isAutoFarmEnabled() then
+                    teleportTo(carPos)
+                    task.wait(2.0)
+                end
+                
+                if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
-                        local flyHeight = 250
-                        local hoverStart = Vector3.new(startPos.X, startPos.Y + flyHeight, startPos.Z)
-                        local hoverEnd = Vector3.new(endPos.X, endPos.Y + flyHeight, endPos.Z)
+                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+                        local startTime = tick()
                         
-                        teleportTo(hoverStart)
-                        task.wait(0.2)
+                        while isAutoFarmEnabled() and (tick() - startTime) < 15 do
+                            root = getCharRoot(false)
+                            if not root then break end
+                            if root.Position.Z >= jumpPos.Z then
+                                break
+                            end
+                            task.wait(0.1)
+                        end
+                        
+                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
                         
                         if isAutoFarmEnabled() then
-                            glideTo(hoverStart, hoverEnd, 1.5)
-                            task.wait(0.1)
+                            local flyHeight = 250
+                            local hoverStart = Vector3.new(jumpPos.X, jumpPos.Y + flyHeight, jumpPos.Z)
+                            local hoverEnd = Vector3.new(endPos.X, endPos.Y + flyHeight, endPos.Z)
+                            
+                            teleportTo(hoverStart)
+                            task.wait(0.2)
                             
                             if isAutoFarmEnabled() then
-                                teleportTo(endPos)
-                                task.wait(0.5)
+                                glideTo(hoverStart, hoverEnd, 1.5)
+                                task.wait(0.1)
                                 
                                 if isAutoFarmEnabled() then
-                                    local openTime = tick()
-                                    local camera = Workspace.CurrentCamera
+                                    teleportTo(endPos)
+                                    task.wait(0.5)
                                     
-                                    while isAutoFarmEnabled() and (tick() - openTime) < 3.5 do
-                                        teleportTo(endPos)
+                                    if isAutoFarmEnabled() then
+                                        local openTime = tick()
+                                        local camera = Workspace.CurrentCamera
                                         
-                                        local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                                        VirtualUser:Button1Down(center, camera.CFrame)
-                                        task.wait(0.05)
-                                        VirtualUser:Button1Up(center, camera.CFrame)
-                                        
-                                        pcall(function()
-                                            if getconnections then
-                                                local function clickBtns(parent)
-                                                    for _, obj in ipairs(parent:GetDescendants()) do
-                                                        if (obj:IsA("TextButton") or obj:IsA("ImageButton")) then
-                                                            if obj:IsA("TextButton") and obj.Text and obj.Text:lower():find("открыть") then
-                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
-                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
-                                                            elseif obj:IsA("ImageButton") then
-                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
-                                                                for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
+                                        while isAutoFarmEnabled() and (tick() - openTime) < 3.5 do
+                                            teleportTo(endPos)
+                                            
+                                            local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                                            VirtualUser:Button1Down(center, camera.CFrame)
+                                            task.wait(0.05)
+                                            VirtualUser:Button1Up(center, camera.CFrame)
+                                            
+                                            pcall(function()
+                                                if getconnections then
+                                                    local function clickBtns(parent)
+                                                        for _, obj in ipairs(parent:GetDescendants()) do
+                                                            if (obj:IsA("TextButton") or obj:IsA("ImageButton")) then
+                                                                if obj:IsA("TextButton") and obj.Text and obj.Text:lower():find("открыть") then
+                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
+                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
+                                                                elseif obj:IsA("ImageButton") then
+                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Down)) do conn:Fire() end
+                                                                    for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                    clickBtns(LocalPlayer.PlayerGui)
+                                                    clickBtns(Workspace)
+                                                end
+                                            end)
+                                            
+                                            pcall(function()
+                                                for _, obj in ipairs(Workspace:GetDescendants()) do
+                                                    if obj:IsA("ProximityPrompt") then
+                                                        local parentPart = obj.Parent
+                                                        if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
+                                                            if fireproximityprompt then
+                                                                fireproximityprompt(obj, 1)
+                                                                fireproximityprompt(obj, 0)
+                                                            else
+                                                                obj:InputHoldBegin()
+                                                                task.wait(0.05)
+                                                                obj:InputHoldEnd()
+                                                            end
+                                                        end
+                                                    elseif obj:IsA("ClickDetector") then
+                                                        local parentPart = obj.Parent
+                                                        if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
+                                                            if fireclickdetector then
+                                                                fireclickdetector(obj)
                                                             end
                                                         end
                                                     end
                                                 end
-                                                clickBtns(LocalPlayer.PlayerGui)
-                                                clickBtns(Workspace)
-                                            end
-                                        end)
-                                        
-                                        pcall(function()
-                                            for _, obj in ipairs(Workspace:GetDescendants()) do
-                                                if obj:IsA("ProximityPrompt") then
-                                                    local parentPart = obj.Parent
-                                                    if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
-                                                        if fireproximityprompt then
-                                                            fireproximityprompt(obj, 1)
-                                                            fireproximityprompt(obj, 0)
-                                                        else
-                                                            obj:InputHoldBegin()
-                                                            task.wait(0.05)
-                                                            obj:InputHoldEnd()
-                                                        end
-                                                    end
-                                                elseif obj:IsA("ClickDetector") then
-                                                    local parentPart = obj.Parent
-                                                    if parentPart and parentPart:IsA("BasePart") and (parentPart.Position - endPos).Magnitude < 100 then
-                                                        if fireclickdetector then
-                                                            fireclickdetector(obj)
-                                                        end
-                                                    end
-                                                end
-                                            end
-                                        end)
-                                        task.wait(0.1)
+                                            end)
+                                            task.wait(0.1)
+                                        end
                                     end
                                 end
                             end
@@ -650,10 +779,10 @@ end)
 
 
 -- MOVEMENT & SPEED
-createLabel("ПОЛЕТ И СКОРОСТЬ")
-local isCustomSpeed = createToggle("Включить кастомную скорость")
-local getSpeed = createSlider("Скорость (Ходьба / Машина)", 16, 1000, 100)
-local isFlyEnabled = createToggle("Свободный полет (Fly)")
+createLabel(_t("Speed"))
+local isCustomSpeed = createToggle(_t("CustomSpeed"))
+local getSpeed = createSlider(_t("SpeedSlider"), 16, 1000, 100)
+local isFlyEnabled = createToggle(_t("Fly"))
 
 local wasWalkSpeedChanged = false
 RunService.Heartbeat:Connect(function()
@@ -725,6 +854,13 @@ RunService.RenderStepped:Connect(function()
                 if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
                 
                 local currentSpeed = isCustomSpeed() and getSpeed() or 50
+                
+                if root.Name ~= "HumanoidRootPart" then
+                    flyBG.P = 9e6
+                    flyBG.D = 1000
+                    root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                end
+                
                 flyBV.velocity = moveDir.Magnitude > 0 and moveDir.Unit * currentSpeed or Vector3.new(0, 0, 0)
             end
         end
@@ -734,9 +870,9 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- OTHER
-createLabel("ДРУГОЕ")
-local isAntiAfkEnabled = createToggle("Анти-АФК")
-local isInvisibleEnabled = createToggle("Невидимость (Invisibility)")
+createLabel(_t("Other"))
+local isAntiAfkEnabled = createToggle(_t("AntiAfk"))
+local isInvisibleEnabled = createToggle(_t("Invis"))
 
 LocalPlayer.Idled:Connect(function()
     if isAntiAfkEnabled() then
