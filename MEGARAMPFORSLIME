@@ -716,7 +716,8 @@ task.spawn(function()
         if isAutoFarmEnabled() then
             local startPos = Vector3.new(-1, 125, -1576)
             local carPos = Vector3.new(0, 124, -1537)
-            local jumpPos = Vector3.new(-6, 105, -1196)
+            local jumpPos = Vector3.new(-9, 111, -1173)
+            local flyPos = Vector3.new(2, 284, -363)
             local endPos = Vector3.new(8, 3, 2803)
             
             if startPos and endPos then
@@ -725,7 +726,12 @@ task.spawn(function()
                 
                 if isAutoFarmEnabled() then
                     teleportTo(carPos)
-                    task.wait(0.05)
+                    local waitVehicleTime = tick()
+                    while isAutoFarmEnabled() and (tick() - waitVehicleTime) < 3.0 do
+                        local r, rType = getCharRoot(false)
+                        if rType == "Vehicle" then break end
+                        task.wait(0.1)
+                    end
                 end
                 
                 if isAutoFarmEnabled() then
@@ -749,8 +755,11 @@ task.spawn(function()
                             root = getCharRoot(false)
                             local flyStart = root and root.Position or jumpPos
                             
-                            -- Прямой полет до финиша, чтобы собрать все X
-                            safeMove(flyStart, endPos, 1.5)
+                            -- Прямой полет через промежуточную точку
+                            safeMove(flyStart, flyPos, 0.7)
+                            if isAutoFarmEnabled() then
+                                safeMove(flyPos, endPos, 0.8)
+                            end
                             
                             if isAutoFarmEnabled() then
                                 teleportTo(endPos, true)
