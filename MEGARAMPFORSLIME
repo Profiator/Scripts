@@ -676,6 +676,8 @@ local function safeMove(startPos, endPos, duration)
     
     local startTime = tick()
     local connection
+    local moveVelocity = (endPos - startPos) / duration
+    
     connection = RunService.Heartbeat:Connect(function()
         local elapsed = tick() - startTime
         local alpha = math.clamp(elapsed / duration, 0, 1)
@@ -688,14 +690,14 @@ local function safeMove(startPos, endPos, duration)
         if rootType == "Vehicle" and vehicleModel then
             for _, part in ipairs(vehicleModel:GetDescendants()) do
                 if part:IsA("BasePart") then
-                    part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    part.AssemblyLinearVelocity = moveVelocity
                     part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 end
             end
             vehicleModel:PivotTo(cframe)
         else
             root.CFrame = cframe
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            root.AssemblyLinearVelocity = moveVelocity
             root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         end
         
@@ -719,11 +721,11 @@ task.spawn(function()
             
             if startPos and endPos then
                 teleportTo(startPos)
-                task.wait(0.1)
+                task.wait(0.05)
                 
                 if isAutoFarmEnabled() then
                     teleportTo(carPos)
-                    task.wait(0.1)
+                    task.wait(0.05)
                 end
                 
                 if isAutoFarmEnabled() then
@@ -744,26 +746,18 @@ task.spawn(function()
                         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
                         
                         if isAutoFarmEnabled() then
-                            local flyHeight = 250
-                            local hoverStart = Vector3.new(jumpPos.X, jumpPos.Y + flyHeight, jumpPos.Z)
-                            local hoverEnd = Vector3.new(endPos.X, endPos.Y + flyHeight, endPos.Z)
+                            root = getCharRoot(false)
+                            local flyStart = root and root.Position or jumpPos
                             
-                            teleportTo(hoverStart)
-                            task.wait(0.1)
+                            -- Прямой полет до финиша, чтобы собрать все X
+                            safeMove(flyStart, endPos, 1.5)
                             
                             if isAutoFarmEnabled() then
-                                safeMove(hoverStart, hoverEnd, 1.5)
-                                task.wait()
+                                teleportTo(endPos, true)
                                 
                                 if isAutoFarmEnabled() then
-                                    safeMove(hoverEnd, endPos, 0.5)
-                                    task.wait()
-                                    teleportTo(endPos, true)
-                                    task.wait()
-                                    
-                                    if isAutoFarmEnabled() then
-                                        local openTime = tick()
-                                        local camera = Workspace.CurrentCamera
+                                    local openTime = tick()
+                                    local camera = Workspace.CurrentCamera
                                         
                                         local connection
                                         connection = RunService.RenderStepped:Connect(function()
