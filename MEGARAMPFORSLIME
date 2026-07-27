@@ -674,9 +674,6 @@ local function safeMove(startPos, endPos, duration)
     local root, rootType, vehicleModel = getCharRoot(false)
     if not root then return end
     
-    local origAnchored = root.Anchored
-    root.Anchored = true
-    
     local startTime = tick()
     local connection
     connection = RunService.Heartbeat:Connect(function()
@@ -707,10 +704,8 @@ local function safeMove(startPos, endPos, duration)
         end
     end)
     
-    task.wait(duration + 0.05)
+    task.wait(duration + 0.1)
     if connection then connection:Disconnect() end
-    
-    root.Anchored = origAnchored
 end
 
 task.spawn(function()
@@ -724,11 +719,11 @@ task.spawn(function()
             
             if startPos and endPos then
                 teleportTo(startPos)
-                task.wait(1.5)
+                task.wait(0.1)
                 
                 if isAutoFarmEnabled() then
                     teleportTo(carPos)
-                    task.wait(2.0)
+                    task.wait(0.1)
                 end
                 
                 if isAutoFarmEnabled() then
@@ -737,13 +732,13 @@ task.spawn(function()
                         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
                         local startTime = tick()
                         
-                        while isAutoFarmEnabled() and (tick() - startTime) < 15 do
+                        while isAutoFarmEnabled() and (tick() - startTime) < 5 do
                             root = getCharRoot(false)
                             if not root then break end
                             if root.Position.Z >= jumpPos.Z then
                                 break
                             end
-                            task.wait(0.1)
+                            task.wait()
                         end
                         
                         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
@@ -754,37 +749,37 @@ task.spawn(function()
                             local hoverEnd = Vector3.new(endPos.X, endPos.Y + flyHeight, endPos.Z)
                             
                             teleportTo(hoverStart)
-                            task.wait(0.2)
+                            task.wait(0.1)
                             
                             if isAutoFarmEnabled() then
-                                safeMove(hoverStart, hoverEnd, 0.5)
-                                task.wait(0.1)
+                                safeMove(hoverStart, hoverEnd, 1.5)
+                                task.wait()
                                 
                                 if isAutoFarmEnabled() then
-                                    safeMove(hoverEnd, endPos, 0.3)
-                                    task.wait(0.1)
+                                    safeMove(hoverEnd, endPos, 0.5)
+                                    task.wait()
                                     teleportTo(endPos, true)
-                                    task.wait(0.2)
+                                    task.wait()
                                     
                                     if isAutoFarmEnabled() then
                                         local openTime = tick()
                                         local camera = Workspace.CurrentCamera
                                         
-                                        local endRoot = getCharRoot(false)
-                                        local origAnchor = false
-                                        if endRoot then
-                                            origAnchor = endRoot.Anchored
-                                            endRoot.Anchored = true
-                                        end
-                                        
-                                        teleportTo(endPos, true)
-                                        
-                                        while isAutoFarmEnabled() and (tick() - openTime) < 2.0 do
+                                        local connection
+                                        connection = RunService.RenderStepped:Connect(function()
+                                            if not isAutoFarmEnabled() or (tick() - openTime) >= 2.0 then
+                                                if connection then connection:Disconnect() end
+                                                return
+                                            end
+                                            
+                                            teleportTo(endPos, true)
+                                            
                                             local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                                            VirtualUser:Button1Down(center, camera.CFrame)
-                                            task.wait(0.01)
-                                            VirtualUser:Button1Up(center, camera.CFrame)
-                                            task.wait(0.01)
+                                            -- Fire multiple clicks per frame for extreme speed (100+ times per second)
+                                            for i = 1, 5 do
+                                                VirtualUser:Button1Down(center, camera.CFrame)
+                                                VirtualUser:Button1Up(center, camera.CFrame)
+                                            end
                                             
                                             pcall(function()
                                                 if getconnections then
@@ -816,7 +811,6 @@ task.spawn(function()
                                                                 fireproximityprompt(obj, 0)
                                                             else
                                                                 obj:InputHoldBegin()
-                                                                task.wait(0.05)
                                                                 obj:InputHoldEnd()
                                                             end
                                                         end
@@ -830,9 +824,10 @@ task.spawn(function()
                                                     end
                                                 end
                                             end)
-                                            task.wait()
-                                        end
-                                        if endRoot then endRoot.Anchored = origAnchor end
+                                        end)
+                                        
+                                        task.wait(2.0)
+                                        if connection then connection:Disconnect() end
                                     end
                                 end
                             end
