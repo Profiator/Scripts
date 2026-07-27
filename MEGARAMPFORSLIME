@@ -31,7 +31,7 @@ local T = {
         Fly = "Свободный полет (Fly)",
         Other = "ДРУГОЕ",
         AntiAfk = "Анти-АФК",
-        Invis = "Невидимость (Invisibility)",
+        Invis = "Невидимость (Локальная)",
         Confirm = "Вы уверены, что хотите закрыть скрипт?",
         Yes = "Да",
         No = "Нет",
@@ -49,7 +49,7 @@ local T = {
         Fly = "Free Fly",
         Other = "OTHER",
         AntiAfk = "Anti-AFK",
-        Invis = "Invisibility",
+        Invis = "Invisibility (Local)",
         Confirm = "Are you sure you want to close the script?",
         Yes = "Yes",
         No = "No",
@@ -67,7 +67,7 @@ local T = {
         Fly = "自由飞行",
         Other = "其他",
         AntiAfk = "防挂机",
-        Invis = "隐形",
+        Invis = "隐形 (本地)",
         Confirm = "您确定要关闭脚本吗？",
         Yes = "是",
         No = "否",
@@ -655,6 +655,19 @@ local function glideTo(startPos, endPos, duration)
     
     task.wait(duration + 0.1)
     if connection then connection:Disconnect() end
+    
+    local endRoot, endRootType, endVehicle = getCharRoot(false)
+    if endRootType == "Vehicle" and endVehicle then
+        for _, part in ipairs(endVehicle:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end
+        end
+    elseif endRoot then
+        endRoot.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        endRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+    end
 end
 
 task.spawn(function()
@@ -702,10 +715,12 @@ task.spawn(function()
                             
                             if isAutoFarmEnabled() then
                                 glideTo(hoverStart, hoverEnd, 1.5)
-                                task.wait(0.1)
+                                task.wait(0.2)
                                 
                                 if isAutoFarmEnabled() then
                                     teleportTo(endPos)
+                                    task.wait(0.1)
+                                    teleportTo(endPos) -- double teleport for physics stability
                                     task.wait(0.5)
                                     
                                     if isAutoFarmEnabled() then
