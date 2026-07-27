@@ -651,7 +651,8 @@ local function teleportTo(pos, keepExact)
     local root, rootType, vehicleModel = getCharRoot(false)
     if root then
         -- Поднимаем координаты немного выше, чтобы машина не застревала в текстурах
-        local targetCFrame = keepExact and CFrame.new(pos) or CFrame.new(pos + Vector3.new(0, 3, 0))
+        local rot = root.CFrame.Rotation
+        local targetCFrame = keepExact and CFrame.new(pos) * rot or CFrame.new(pos + Vector3.new(0, 3, 0)) * rot
         
         if rootType == "Vehicle" and vehicleModel then
             for _, part in ipairs(vehicleModel:GetDescendants()) do
@@ -673,6 +674,9 @@ local function safeMove(startPos, endPos, duration)
     local root, rootType, vehicleModel = getCharRoot(false)
     if not root then return end
     
+    local origAnchored = root.Anchored
+    root.Anchored = true
+    
     local startTime = tick()
     local connection
     connection = RunService.Heartbeat:Connect(function()
@@ -682,6 +686,7 @@ local function safeMove(startPos, endPos, duration)
         
         local flatDir = Vector3.new(endPos.X - startPos.X, 0, endPos.Z - startPos.Z)
         local dir = flatDir.Magnitude > 0.001 and flatDir.Unit or Vector3.new(0, 0, 1)
+        -- Чтобы машина не кувыркалась, смотрим строго прямо
         local cframe = CFrame.new(currentPos, currentPos + dir)
         if rootType == "Vehicle" and vehicleModel then
             for _, part in ipairs(vehicleModel:GetDescendants()) do
@@ -702,8 +707,10 @@ local function safeMove(startPos, endPos, duration)
         end
     end)
     
-    task.wait(duration + 0.1)
+    task.wait(duration + 0.05)
     if connection then connection:Disconnect() end
+    
+    root.Anchored = origAnchored
 end
 
 task.spawn(function()
@@ -750,26 +757,34 @@ task.spawn(function()
                             task.wait(0.2)
                             
                             if isAutoFarmEnabled() then
-                                safeMove(hoverStart, hoverEnd, 1.5)
+                                safeMove(hoverStart, hoverEnd, 0.5)
                                 task.wait(0.1)
                                 
                                 if isAutoFarmEnabled() then
-                                    safeMove(hoverEnd, endPos, 0.5)
+                                    safeMove(hoverEnd, endPos, 0.3)
                                     task.wait(0.1)
                                     teleportTo(endPos, true)
-                                    task.wait(0.5)
+                                    task.wait(0.2)
                                     
                                     if isAutoFarmEnabled() then
                                         local openTime = tick()
                                         local camera = Workspace.CurrentCamera
                                         
-                                        while isAutoFarmEnabled() and (tick() - openTime) < 3.5 do
-                                            teleportTo(endPos, true)
-                                            
+                                        local endRoot = getCharRoot(false)
+                                        local origAnchor = false
+                                        if endRoot then
+                                            origAnchor = endRoot.Anchored
+                                            endRoot.Anchored = true
+                                        end
+                                        
+                                        teleportTo(endPos, true)
+                                        
+                                        while isAutoFarmEnabled() and (tick() - openTime) < 2.0 do
                                             local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
                                             VirtualUser:Button1Down(center, camera.CFrame)
-                                            task.wait(0.05)
+                                            task.wait(0.01)
                                             VirtualUser:Button1Up(center, camera.CFrame)
+                                            task.wait(0.01)
                                             
                                             pcall(function()
                                                 if getconnections then
@@ -815,8 +830,9 @@ task.spawn(function()
                                                     end
                                                 end
                                             end)
-                                            task.wait(0.1)
+                                            task.wait()
                                         end
+                                        if endRoot then endRoot.Anchored = origAnchor end
                                     end
                                 end
                             end
