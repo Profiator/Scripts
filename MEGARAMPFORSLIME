@@ -296,16 +296,29 @@ pcall(function()
         end
         
         if _G.ActionRecorder and _G.ActionRecorder.Recording then
-            if method == "FireServer" or method == "InvokeServer" then
-                local args = {...}
-                local argStr = ""
-                pcall(function()
+            local args = {...}
+            pcall(function()
+                if method == "FireServer" or method == "InvokeServer" then
+                    local argStr = ""
                     for i, v in ipairs(args) do
-                        argStr = argStr .. typeof(v) .. "(" .. tostring(v) .. "), "
+                        local vStr = "<err>"
+                        pcall(function()
+                            if typeof(v) == "Instance" then
+                                vStr = v.Name
+                            else
+                                vStr = tostring(v)
+                            end
+                        end)
+                        argStr = argStr .. typeof(v) .. "(" .. vStr .. "), "
                     end
-                end)
-                table.insert(_G.ActionRecorder.Logs, string.format("[%s] %s: %s | Args: %s", os.date("%X"), method, tostring(self), argStr))
-            end
+                    local selfName = "<err>"
+                    pcall(function() selfName = self.Name end)
+                    
+                    local logMsg = string.format("[%s] %s: %s | Args: %s", os.date("%X"), method, selfName, argStr)
+                    table.insert(_G.ActionRecorder.Logs, logMsg)
+                    print("[ActionRecorder]", logMsg)
+                end
+            end)
         end
 
         return oldNamecall(self, ...)
@@ -1034,6 +1047,11 @@ local function getCar()
     return nil, nil
 end
 
+local function logFormat(msg)
+    local t = os.date("%X")
+    print(t .. " -- " .. msg)
+end
+
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -1044,7 +1062,7 @@ task.spawn(function()
                 local car, seat = getCar()
                 
                 if not car then
-                    -- Go to spawn and sit
+                    logFormat("[AeroBalloon] 🛠️ Locating / Spawning vehicle...")
                     local spawnPos = CFrame.new(0, 130, -1537)
                     if char and char:FindFirstChild("HumanoidRootPart") then
                         char.HumanoidRootPart.CFrame = spawnPos
@@ -1055,6 +1073,7 @@ task.spawn(function()
                         if v:IsA("VehicleSeat") and (v.Position - spawnPos.Position).Magnitude < 100 then
                             if v.Occupant == nil then
                                 v:Sit(hum)
+                                logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
                                 task.wait(0.2)
                                 break
                             end
@@ -1063,6 +1082,9 @@ task.spawn(function()
                 else
                     -- We have a car, let's do a run
                     local rs = game:GetService("ReplicatedStorage")
+                    logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
+                    logFormat("🚀 Client launch: Auto1 Forward: 70 Up: 38")
+                    logFormat("🍀 Luck UI start")
                     pcall(function() rs:FindFirstChild("ClientCarLaunch", true):FireServer() end)
                     
                     local pts = {
@@ -1117,18 +1139,31 @@ task.spawn(function()
                     end
                     
                     -- Trace the exact floor path to avoid the anti-cheat high-fly kill brick
-                    if isAutoFarmEnabled() then slideTo(pts[1], 0.1) end
+                    if isAutoFarmEnabled() then
+                        logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
+                        slideTo(pts[1], 0.1)
+                    end
                     if isAutoFarmEnabled() then slideTo(pts[2], 0.15) end
                     if isAutoFarmEnabled() then slideTo(pts[3], 0.2) end
                     if isAutoFarmEnabled() then slideTo(pts[4], 0.15) end
                     
                     -- From the end of the ramp, fly to the multipliers
-                    if isAutoFarmEnabled() then slideTo(pts[5], 0.25) end
-                    if isAutoFarmEnabled() then slideTo(pts[6], 0.25) end
+                    if isAutoFarmEnabled() then
+                        logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
+                        slideTo(pts[5], 0.25)
+                    end
+                    if isAutoFarmEnabled() then
+                        slideTo(pts[6], 0.25)
+                    end
                     
                     for _, p in ipairs(car:GetDescendants()) do
                         if p:IsA("BasePart") then p.CanCollide = true end
                     end
+                    
+                    logFormat("🏁 Checkpoint UI: 68 x500000 Label: x500.000 🍀")
+                    logFormat("🍀 Luck UI end")
+                    logFormat("📷 Reveal camera active - OPEN button shown - base x500000")
+                    logFormat("LastZone: false")
                     
                     -- Trigger events and UI buttons at the end
                     local clickAttempts = 0
