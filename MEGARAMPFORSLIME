@@ -12,6 +12,11 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
+_G.ActionRecorder = {
+    Recording = false,
+    Logs = {}
+}
+
 -- Anti-Cheat / GUI Protection
 local guiParent = CoreGui
 pcall(function()
@@ -289,6 +294,20 @@ pcall(function()
                 end
             end
         end
+        
+        if _G.ActionRecorder and _G.ActionRecorder.Recording then
+            if method == "FireServer" or method == "InvokeServer" then
+                local args = {...}
+                local argStr = ""
+                pcall(function()
+                    for i, v in ipairs(args) do
+                        argStr = argStr .. typeof(v) .. "(" .. tostring(v) .. "), "
+                    end
+                end)
+                table.insert(_G.ActionRecorder.Logs, string.format("[%s] %s: %s | Args: %s", os.date("%X"), method, tostring(self), argStr))
+            end
+        end
+
         return oldNamecall(self, ...)
     end)
 
@@ -1046,31 +1065,30 @@ task.spawn(function()
                     local rs = game:GetService("ReplicatedStorage")
                     pcall(function() rs:FindFirstChild("ClientCarLaunch", true):FireServer() end)
                     
-                    local p1 = Vector3.new(0, 125, -1537)
-                    local p2 = Vector3.new(5, 102, -1205)
-                    local p3 = Vector3.new(5, 50, -363)
-                    local p4 = Vector3.new(8, 3, 2803)
+                    local pts = {
+                        Vector3.new(-1, 122, -1513),
+                        Vector3.new(-1, 115, -1498),
+                        Vector3.new(-1, 63, -1379),
+                        Vector3.new(-4, 76, -1296),
+                        Vector3.new(8, 76, 500),
+                        Vector3.new(8, 3, 2803)
+                    }
                     
                     local function slideTo(targetPos, duration)
                         local startPos = car.PrimaryPart and car.PrimaryPart.Position or seat.Position
                         local t = 0
-                        local params = RaycastParams.new()
-                        params.FilterDescendantsInstances = {car, char}
-                        params.FilterType = Enum.RaycastFilterType.Exclude
+                        
+                        -- Add a body velocity to prevent falling down between frames
+                        local bv = Instance.new("BodyVelocity")
+                        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                        bv.Velocity = Vector3.new(0, 0, 0)
+                        bv.Parent = seat
                         
                         while t < duration and isAutoFarmEnabled() do
                             local dt = RunService.Heartbeat:Wait()
                             t = t + dt
                             local alpha = math.clamp(t / duration, 0, 1)
                             local currPos = startPos:Lerp(targetPos, alpha)
-                            
-                            -- Raycast to keep the car glued to the floor
-                            local rayStart = Vector3.new(currPos.X, currPos.Y + 300, currPos.Z)
-                            local raycastResult = Workspace:Raycast(rayStart, Vector3.new(0, -600, 0), params)
-                            
-                            if raycastResult then
-                                currPos = Vector3.new(currPos.X, raycastResult.Position.Y + 4, currPos.Z)
-                            end
                             
                             local lookAt = Vector3.new(targetPos.X, currPos.Y, targetPos.Z)
                             local newCF
@@ -1095,12 +1113,22 @@ task.spawn(function()
                                 end
                             end
                         end
+                        if bv then bv:Destroy() end
                     end
                     
-                    -- Smoothly drive on the floor through the multipliers (Very Fast)
-                    slideTo(p2, 0.4)
-                    slideTo(p3, 0.4)
-                    slideTo(p4, 0.4)
+                    -- Trace the exact floor path to avoid the anti-cheat high-fly kill brick
+                    if isAutoFarmEnabled() then slideTo(pts[1], 0.1) end
+                    if isAutoFarmEnabled() then slideTo(pts[2], 0.15) end
+                    if isAutoFarmEnabled() then slideTo(pts[3], 0.2) end
+                    if isAutoFarmEnabled() then slideTo(pts[4], 0.15) end
+                    
+                    -- From the end of the ramp, fly to the multipliers
+                    if isAutoFarmEnabled() then slideTo(pts[5], 0.25) end
+                    if isAutoFarmEnabled() then slideTo(pts[6], 0.25) end
+                    
+                    for _, p in ipairs(car:GetDescendants()) do
+                        if p:IsA("BasePart") then p.CanCollide = true end
+                    end
                     
                     -- Trigger events and UI buttons at the end
                     local clickAttempts = 0
@@ -1364,7 +1392,7 @@ AnalysisText.Parent = AnalysisOutput
 
 local btnScan = Instance.new("TextButton")
 btnScan.Position = UDim2.new(0, 0, 0, 190)
-btnScan.Size = UDim2.new(1, 0, 0, 40)
+btnScan.Size = UDim2.new(1, 0, 0, 35)
 btnScan.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
 btnScan.Text = "Start Full Analysis (Prints to F9 Console)"
 btnScan.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1372,6 +1400,75 @@ btnScan.Font = Enum.Font.GothamBold
 btnScan.TextSize = 14
 btnScan.Parent = GameInfoTab
 Instance.new("UICorner", btnScan).CornerRadius = UDim.new(0, 6)
+
+local btnStartRecord = Instance.new("TextButton")
+btnStartRecord.Position = UDim2.new(0, 0, 0, 235)
+btnStartRecord.Size = UDim2.new(0.5, -5, 0, 35)
+btnStartRecord.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+btnStartRecord.Text = "Start Recording"
+btnStartRecord.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnStartRecord.Font = Enum.Font.GothamBold
+btnStartRecord.TextSize = 14
+btnStartRecord.Parent = GameInfoTab
+Instance.new("UICorner", btnStartRecord).CornerRadius = UDim.new(0, 6)
+
+local btnStopRecord = Instance.new("TextButton")
+btnStopRecord.Position = UDim2.new(0.5, 5, 0, 235)
+btnStopRecord.Size = UDim2.new(0.5, -5, 0, 35)
+btnStopRecord.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+btnStopRecord.Text = "Stop & Save"
+btnStopRecord.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnStopRecord.Font = Enum.Font.GothamBold
+btnStopRecord.TextSize = 14
+btnStopRecord.Parent = GameInfoTab
+Instance.new("UICorner", btnStopRecord).CornerRadius = UDim.new(0, 6)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if _G.ActionRecorder and _G.ActionRecorder.Recording then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            table.insert(_G.ActionRecorder.Logs, string.format("[%s] KeyPressed: %s", os.date("%X"), tostring(input.KeyCode.Name)))
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+            table.insert(_G.ActionRecorder.Logs, string.format("[%s] MouseClick: %s", os.date("%X"), tostring(input.Position)))
+        end
+    end
+end)
+
+btnStartRecord.MouseButton1Click:Connect(function()
+    _G.ActionRecorder.Recording = true
+    _G.ActionRecorder.Logs = {}
+    table.insert(_G.ActionRecorder.Logs, "=== RECORDING STARTED ===")
+    
+    AnalysisText.Text = "Recording started... perform your actions in game."
+    btnStartRecord.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    btnStartRecord.Text = "Recording..."
+end)
+
+btnStopRecord.MouseButton1Click:Connect(function()
+    if not _G.ActionRecorder.Recording then return end
+    _G.ActionRecorder.Recording = false
+    table.insert(_G.ActionRecorder.Logs, "=== RECORDING STOPPED ===")
+    
+    local logData = table.concat(_G.ActionRecorder.Logs, "\n")
+    AnalysisText.Text = logData
+    AnalysisText.Size = UDim2.new(1, -10, 0, math.max(1000, #_G.ActionRecorder.Logs * 15))
+    AnalysisOutput.CanvasSize = UDim2.new(0, 0, 0, math.max(1000, #_G.ActionRecorder.Logs * 15))
+    
+    btnStartRecord.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    btnStartRecord.Text = "Start Recording"
+    
+    if writefile then
+        local fileName = "ActionLogs_" .. tostring(math.floor(tick())) .. ".txt"
+        pcall(function()
+            writefile(fileName, logData)
+        end)
+        AnalysisText.Text = "Saved to Workspace folder as " .. fileName .. "\n\n" .. logData
+    else
+        if setclipboard then
+            setclipboard(logData)
+            AnalysisText.Text = "Copied to clipboard! (writefile not supported)\n\n" .. logData
+        end
+    end
+end)
 
 btnScan.MouseButton1Click:Connect(function()
     local logData = "=== STARTING FULL GAME ANALYSIS ===\n"
