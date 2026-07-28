@@ -48,7 +48,19 @@ local T = {
         TabVisuals = "ВИЗУАЛ",
         TabAnalysis = "АНАЛИТИКА",
         TabPlayers = "ИГРОКИ",
-        CopyLogs = "Скопировано в буфер обмена!"
+        TabTeleports = "ТЕЛЕПОРТЫ",
+        CopyLogs = "Скопировано в буфер обмена!",
+        Pets = "ПИТОМЦЫ",
+        AutoEquip = "Авто-экипировка (Best)",
+        CarMods = "МОДЫ НА МАШИНУ",
+        NoClip = "No-Clip (Сквозь стены)",
+        AutoFlip = "Авто-переворот машины",
+        InfJump = "Бесконечный прыжок",
+        Locations = "ЛОКАЦИИ",
+        TpCarShop = "Магазин Машин",
+        TpPaintShop = "Покрасочная",
+        TpMiniParkour = "Мини-Паркур",
+        TpEventShop = "Магазин Событий"
     },
     EN = {
         Title = "MEGA RAMP FOR SLIME",
@@ -78,7 +90,19 @@ local T = {
         TabVisuals = "VISUALS",
         TabAnalysis = "ANALYSIS",
         TabPlayers = "PLAYERS",
-        CopyLogs = "Copied to clipboard!"
+        TabTeleports = "TELEPORTS",
+        CopyLogs = "Copied to clipboard!",
+        Pets = "PETS",
+        AutoEquip = "Auto-Equip Best",
+        CarMods = "CAR MODS",
+        NoClip = "No-Clip (Ghost)",
+        AutoFlip = "Auto-Flip Car",
+        InfJump = "Infinite Jump",
+        Locations = "LOCATIONS",
+        TpCarShop = "Car Shop",
+        TpPaintShop = "Paint Shop",
+        TpMiniParkour = "Mini Parkour",
+        TpEventShop = "Event Shop"
     },
     ZH = {
         Title = "MEGA RAMP FOR SLIME",
@@ -108,7 +132,19 @@ local T = {
         TabVisuals = "视觉效果",
         TabAnalysis = "分析",
         TabPlayers = "玩家",
-        CopyLogs = "已复制到剪贴板！"
+        TabTeleports = "传送点",
+        CopyLogs = "已复制到剪贴板！",
+        Pets = "宠物",
+        AutoEquip = "自动装备最好",
+        CarMods = "汽车改装",
+        NoClip = "穿墙 (No-Clip)",
+        AutoFlip = "自动翻车恢复",
+        InfJump = "无限跳跃",
+        Locations = "地点",
+        TpCarShop = "汽车商店",
+        TpPaintShop = "喷漆店",
+        TpMiniParkour = "迷你跑酷",
+        TpEventShop = "活动商店"
     }
 }
 local curLang = "RU"
@@ -666,10 +702,10 @@ end
 -- === CONTENT ===
 local MainTab = createTab(_t("TabMain") or "MAIN")
 local ShopTab = createTab(_t("TabShop") or "SHOP")
+local TeleportsTab = createTab(_t("TabTeleports") or "TELEPORTS")
 local VisualsTab = createTab(_t("TabVisuals") or "VISUALS")
 local GameInfoTab = createTab(_t("TabAnalysis") or "ANALYSIS")
 local PlayersTab = createTab(_t("TabPlayers") or "PLAYERS")
-
 
 -- PROFILE
 createLabel(_t("Profile"), MainTab)
@@ -748,6 +784,26 @@ local isAutoFarmEnabled = createToggle(_t("EnableAutoFarm"), MainTab)
 local AutoFarmInfo = createLabel(_t("AFInfo"), MainTab)
 AutoFarmInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
 AutoFarmInfo.TextSize = 12
+
+
+-- PETS
+createLabel(_t("Pets") or "PETS", ShopTab)
+local isAutoEquipEnabled = createToggle(_t("AutoEquip") or "Auto-Equip", ShopTab)
+
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if isAutoEquipEnabled() then
+            pcall(function()
+                local rs = game:GetService("ReplicatedStorage")
+                local equipRemote = rs:FindFirstChild("EquipBestInventory", true)
+                if equipRemote and equipRemote:IsA("RemoteEvent") then
+                    equipRemote:FireServer()
+                end
+            end)
+        end
+    end
+end)
 
 -- EVENT SHOP & BALANCE
 createLabel(_t("EventShop"), ShopTab)
@@ -944,87 +1000,112 @@ local function safeMove(startPos, endPos, duration, forceVel)
 end
 
 
--- FAST AUTO FARM & OPEN LOGIC (NO LAG, DATA SPOOFING)
-local cachedHitboxes = {}
-local lastScan = 0
+-- FAST AUTO FARM & OPEN LOGIC (SMOOTH MOVEMENT)
+local function getCar()
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum and hum.SeatPart then
+            local model = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
+            if model and model ~= Workspace then
+                return model, hum.SeatPart
+            end
+        end
+    end
+    return nil, nil
+end
 
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(0.1)
         if isAutoFarmEnabled() then
             pcall(function()
-                local rs = game:GetService("ReplicatedStorage")
                 local char = LocalPlayer.Character
-                local root = getCharRoot(false)
+                local hum = char and char:FindFirstChild("Humanoid")
+                local car, seat = getCar()
                 
-                -- 1. INSTANT TOUCH ALL HITBOXES / MULTIPLIERS (Skip physical driving)
-                if root and firetouchinterest then
-                    if tick() - lastScan > 5 then
-                        lastScan = tick()
-                        table.clear(cachedHitboxes)
-                        for _, v in ipairs(Workspace:GetDescendants()) do
-                            if v:IsA("BasePart") then
-                                local n = v.Name:lower()
-                                if n == "hitbox" or n:find("multiplier") or n:find("chest") or n:find("case") then
-                                    table.insert(cachedHitboxes, v)
+                if not car then
+                    -- Go to spawn and sit
+                    local spawnPos = CFrame.new(0, 130, -1537)
+                    if char and char:FindFirstChild("HumanoidRootPart") then
+                        char.HumanoidRootPart.CFrame = spawnPos
+                        char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+                    end
+                    task.wait(0.5)
+                    for _, v in ipairs(Workspace:GetDescendants()) do
+                        if v:IsA("VehicleSeat") and (v.Position - spawnPos.Position).Magnitude < 100 then
+                            v:Sit(hum)
+                            task.wait(0.5)
+                            break
+                        end
+                    end
+                else
+                    -- We have a car, let's do a run
+                    local rs = game:GetService("ReplicatedStorage")
+                    pcall(function() rs:FindFirstChild("ClientCarLaunch", true):FireServer() end)
+                    
+                    local c1 = CFrame.new(0, 125, -1537)
+                    local c2 = CFrame.new(5, 102, -1205)
+                    local c3 = CFrame.new(5, 284, -363)
+                    local c4 = CFrame.new(8, 3, 2803)
+                    
+                    local function slideTo(target, duration)
+                        local start = car.PrimaryPart and car.PrimaryPart.CFrame or seat.CFrame
+                        local t = 0
+                        while t < duration and isAutoFarmEnabled() do
+                            local dt = task.wait()
+                            t = t + dt
+                            local alpha = math.clamp(t / duration, 0, 1)
+                            car:PivotTo(start:Lerp(target, alpha))
+                            for _, p in ipairs(car:GetDescendants()) do
+                                if p:IsA("BasePart") then
+                                    p.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                                    p.AssemblyAngularVelocity = Vector3.new(0,0,0)
                                 end
                             end
                         end
                     end
                     
-                    for _, v in ipairs(cachedHitboxes) do
-                        if v.Parent then
-                            firetouchinterest(root, v, 0)
-                            firetouchinterest(root, v, 1)
+                    -- Smoothly fly through the multipliers
+                    slideTo(c2, 1.5)
+                    slideTo(c3, 1.5)
+                    slideTo(c4, 1.5)
+                    
+                    -- Trigger events and UI buttons at the end
+                    for i = 1, 5 do
+                        if not isAutoFarmEnabled() then break end
+                        task.wait(0.5)
+                        
+                        local remotes = {
+                            "OpenBoxClick", "ManageSlimeOpen", "SlimeReveal", "EndBoxReveal", "RetryRun", "StartBoxReveal", "BoxStarsReveal"
+                        }
+                        for _, rName in ipairs(remotes) do
+                            local r = rs:FindFirstChild(rName, true)
+                            if r and r:IsA("RemoteEvent") then
+                                pcall(function() r:FireServer() end)
+                            end
                         end
-                    end
-                end
-                
-                -- 2. FIRE ALL WIN/OPEN REMOTES IN BATCH
-                local remotes = {
-                    "ClientCarLaunch", "JumpLuckStart", "CheckpointLuckUpdate", "JumpLuckEnd",
-                    "StartBoxReveal", "BoxSound", "BoxStarsReveal", "OpenBoxClick",
-                    "ManageSlimeOpen", "SlimeReveal", "EndBoxReveal", "RetryRun"
-                }
-                for _, rName in ipairs(remotes) do
-                    local r = rs:FindFirstChild(rName, true)
-                    if r and r:IsA("RemoteEvent") then
-                        r:FireServer()
-                    end
-                end
-                
-                -- 3. AGGRESSIVE UI CLICKING (Skip animations, auto-open)
-                for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                    if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                        if obj.Visible then
-                            local txt = (obj:IsA("TextButton") and obj.Text or ""):lower()
-                            local name = obj.Name:lower()
-                            if txt:find("open") or txt:find("claim") or txt:find("skip") or txt:find("play") or txt:find("retry") or txt:find("открыть") or txt:find("забрать") or name:find("open") or name:find("claim") or name == "openboxbutton" then
-                                if getconnections then
-                                    for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
-                                    for _, conn in ipairs(getconnections(obj.Activated)) do conn:Fire() end
+                        
+                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                            if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+                                if obj.Visible then
+                                    local txt = (obj:IsA("TextLabel") and obj.Text or ""):lower()
+                                    if obj:IsA("TextButton") then txt = obj.Text:lower() end
+                                    local name = obj.Name:lower()
+                                    
+                                    if txt:find("open") or txt:find("claim") or txt:find("skip") or txt:find("play") or txt:find("retry") or txt:find("открыть") or txt:find("забрать") or name:find("open") or name:find("claim") or name:find("retry") or name == "openboxbutton" or name == "textbutton" then
+                                        if getconnections then
+                                            for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
+                                            for _, conn in ipairs(getconnections(obj.Activated)) do conn:Fire() end
+                                        end
+                                    end
                                 end
                             end
                         end
                     end
+                    
+                    task.wait(1)
                 end
-                
-                -- 4. ENSURE WE ARE IN CAR FOR NEXT RUN (Fallback)
-                if root then
-                    local carPos = Vector3.new(0, 124, -1537)
-                    local humanoid = char and char:FindFirstChild("Humanoid")
-                    if humanoid and not humanoid.SeatPart then
-                        teleportTo(carPos, true)
-                        task.wait(0.2)
-                        for _, v in ipairs(Workspace:GetDescendants()) do
-                            if (v:IsA("VehicleSeat") or v:IsA("Seat")) and (v.Position - carPos).Magnitude < 100 then
-                                v:Sit(humanoid)
-                                break
-                            end
-                        end
-                    end
-                end
-                
             end)
         end
     end
@@ -1035,6 +1116,62 @@ createLabel(_t("Speed"), MainTab)
 local isCustomSpeed = createToggle(_t("CustomSpeed"), MainTab)
 local getSpeed = createSlider(_t("SpeedSlider"), 16, 1000, 100, MainTab)
 local isFlyEnabled = createToggle(_t("Fly"), MainTab)
+
+createLabel(_t("CarMods") or "CAR MODS", MainTab)
+local isNoClipEnabled = createToggle(_t("NoClip") or "No-Clip", MainTab)
+local isAutoFlipEnabled = createToggle(_t("AutoFlip") or "Auto-Flip", MainTab)
+local isInfJumpEnabled = createToggle(_t("InfJump") or "Inf Jump", MainTab)
+
+
+
+RunService.Stepped:Connect(function()
+    if isNoClipEnabled() then
+        local root, rType, vModel = getCharRoot(false)
+        if vModel then
+            for _, p in ipairs(vModel:GetDescendants()) do
+                if p:IsA("BasePart") and p.CanCollide then
+                    p.CanCollide = false
+                end
+            end
+        end
+        local char = LocalPlayer.Character
+        if char then
+            for _, p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") and p.CanCollide then
+                    p.CanCollide = false
+                end
+            end
+        end
+    end
+    
+    if isAutoFlipEnabled() then
+        local root, rType, vModel = getCharRoot(false)
+        if rType == "Vehicle" and vModel and vModel.PrimaryPart then
+            local rx, ry, rz = vModel.PrimaryPart.CFrame:ToOrientation()
+            if math.abs(math.deg(rx)) > 80 or math.abs(math.deg(rz)) > 80 then
+                vModel:PivotTo(CFrame.new(vModel.PrimaryPart.Position) * CFrame.Angles(0, ry, 0) + Vector3.new(0, 3, 0))
+            end
+        end
+    end
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if isInfJumpEnabled() then
+        local root, rType, vModel = getCharRoot(false)
+        if rType == "Vehicle" and vModel and vModel.PrimaryPart then
+            vModel.PrimaryPart.AssemblyLinearVelocity = Vector3.new(
+                vModel.PrimaryPart.AssemblyLinearVelocity.X,
+                50,
+                vModel.PrimaryPart.AssemblyLinearVelocity.Z
+            )
+        else
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end
+end)
 
 local wasWalkSpeedChanged = false
 RunService.Heartbeat:Connect(function()
@@ -1358,3 +1495,62 @@ Players.PlayerAdded:Connect(refreshPlayerList)
 Players.PlayerRemoving:Connect(refreshPlayerList)
 refreshPlayerList()
 
+
+
+-- TELEPORTS
+createLabel(_t("Locations") or "LOCATIONS", TeleportsTab)
+
+local function teleportToLocation(name)
+    local target = nil
+    for _, v in ipairs(Workspace:GetDescendants()) do
+        if v:IsA("Model") or v:IsA("BasePart") then
+            if v.Name:lower():find(name:lower()) then
+                target = v
+                break
+            end
+        end
+    end
+    if target then
+        local pos = target:IsA("Model") and (target.PrimaryPart and target.PrimaryPart.Position or target:GetModelCFrame().p) or target.Position
+        teleportTo(pos + Vector3.new(0, 5, 0), false)
+    end
+end
+
+local function createTeleportBtn(text, parent, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 35)
+    btn.Position = UDim2.new(0, 10, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, 45)
+    f.BackgroundTransparency = 1
+    f.Parent = parent
+    
+    btn.Parent = f
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+createTeleportBtn(_t("TpCarShop") or "Car Shop", TeleportsTab, function()
+    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("OpenCarShop", true):FireServer() end)
+    teleportToLocation("carshop")
+end)
+createTeleportBtn(_t("TpPaintShop") or "Paint Shop", TeleportsTab, function()
+    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("PaintShopEvent", true):FireServer() end)
+    teleportToLocation("paintshop")
+end)
+createTeleportBtn(_t("TpEventShop") or "Event Shop", TeleportsTab, function()
+    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("OpenEventShop", true):FireServer() end)
+    teleportToLocation("eventshop")
+end)
+createTeleportBtn(_t("TpMiniParkour") or "Mini Parkour", TeleportsTab, function()
+    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("MiniParkourEvent", true):FireServer() end)
+    teleportToLocation("miniparkour")
+end)
