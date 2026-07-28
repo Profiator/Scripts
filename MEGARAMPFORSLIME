@@ -42,7 +42,13 @@ local T = {
         TimerSelect = "Таймер события (сек)",
         BalanceDisplay = "Баланс: 0 | Монеты: 0",
         PlayersLabel = "ИГРОКИ (ESP)",
-        ESP = "Включить ESP (Подсветка игроков)"
+        ESP = "Включить ESP (Подсветка игроков)",
+        TabMain = "ГЛАВНАЯ",
+        TabShop = "МАГАЗИН",
+        TabVisuals = "ВИЗУАЛ",
+        TabAnalysis = "АНАЛИТИКА",
+        TabPlayers = "ИГРОКИ",
+        CopyLogs = "Скопировано в буфер обмена!"
     },
     EN = {
         Title = "MEGA RAMP FOR SLIME",
@@ -66,7 +72,13 @@ local T = {
         TimerSelect = "Event Timer (sec)",
         BalanceDisplay = "Balance: 0 | Coins: 0",
         PlayersLabel = "PLAYERS (ESP)",
-        ESP = "Enable ESP (Highlight)"
+        ESP = "Enable ESP (Highlight)",
+        TabMain = "MAIN",
+        TabShop = "EVENT SHOP",
+        TabVisuals = "VISUALS",
+        TabAnalysis = "ANALYSIS",
+        TabPlayers = "PLAYERS",
+        CopyLogs = "Copied to clipboard!"
     },
     ZH = {
         Title = "MEGA RAMP FOR SLIME",
@@ -90,7 +102,13 @@ local T = {
         TimerSelect = "活动计时器（秒）",
         BalanceDisplay = "余额: 0 | 金币: 0",
         PlayersLabel = "玩家 (ESP)",
-        ESP = "启用 ESP (高亮)"
+        ESP = "启用 ESP (高亮)",
+        TabMain = "主要",
+        TabShop = "商店",
+        TabVisuals = "视觉效果",
+        TabAnalysis = "分析",
+        TabPlayers = "玩家",
+        CopyLogs = "已复制到剪贴板！"
     }
 }
 local curLang = "RU"
@@ -646,11 +664,11 @@ end
 
 
 -- === CONTENT ===
-local MainTab = createTab("MAIN")
-local ShopTab = createTab("EVENT SHOP")
-local VisualsTab = createTab("VISUALS")
-local GameInfoTab = createTab("ANALYSIS")
-local PlayersTab = createTab("PLAYERS")
+local MainTab = createTab(_t("TabMain") or "MAIN")
+local ShopTab = createTab(_t("TabShop") or "SHOP")
+local VisualsTab = createTab(_t("TabVisuals") or "VISUALS")
+local GameInfoTab = createTab(_t("TabAnalysis") or "ANALYSIS")
+local PlayersTab = createTab(_t("TabPlayers") or "PLAYERS")
 
 
 -- PROFILE
@@ -997,12 +1015,10 @@ task.spawn(function()
                     elseif root and obj:IsA("BasePart") then
                         local pName = obj.Name:lower()
                         if pName:find("x%d") or pName:find("multiplier") or pName:find("case") or pName:find("chest") then
-                            if (obj.Position - root.Position).Magnitude < 150 then
-                                if firetouchinterest then
-                                    firetouchinterest(root, obj, 0)
-                                    task.wait(0.01)
-                                    firetouchinterest(root, obj, 1)
-                                end
+                            if firetouchinterest then
+                                firetouchinterest(root, obj, 0)
+                                task.wait(0.005)
+                                firetouchinterest(root, obj, 1)
                             end
                         end
                     end
@@ -1133,7 +1149,21 @@ task.spawn(function()
                             
                             -- 4. Ожидание открытия кейсов на финише (3 секунды)
                             if isAutoFarmEnabled() then
+                                -- Wait for GUI to show the OPEN button
                                 task.wait(3.0)
+                                -- Ensure all remote events for claiming are fired
+                                pcall(function()
+                                    for _, remote in ipairs(game:GetService(ReplicatedStorage):GetDescendants()) do
+                                        if remote:IsA(RemoteEvent) then
+                                            local rName = remote.Name:lower()
+                                            if rName:find(claim) or rName:find(
+eward) or rName:find(spin) or rName:find(open) then
+                                                remote:FireServer()
+                                            end
+                                        end
+                                    end
+                                end)
+                                task.wait(1.0)
                             end
                         end
                     end
@@ -1287,7 +1317,30 @@ end)
 
 
 createLabel("Game Analysis & Logic", GameInfoTab)
+
+local AnalysisOutput = Instance.new("ScrollingFrame")
+AnalysisOutput.Size = UDim2.new(1, -10, 0, 150)
+AnalysisOutput.Position = UDim2.new(0, 5, 0, 30)
+AnalysisOutput.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+AnalysisOutput.ScrollBarThickness = 4
+AnalysisOutput.Parent = GameInfoTab
+Instance.new("UICorner", AnalysisOutput).CornerRadius = UDim.new(0, 6)
+
+local AnalysisText = Instance.new("TextLabel")
+AnalysisText.Size = UDim2.new(1, -10, 1, -10)
+AnalysisText.Position = UDim2.new(0, 5, 0, 5)
+AnalysisText.BackgroundTransparency = 1
+AnalysisText.Text = "Logs will appear here..."
+AnalysisText.TextColor3 = Color3.fromRGB(200, 200, 200)
+AnalysisText.Font = Enum.Font.Code
+AnalysisText.TextSize = 12
+AnalysisText.TextXAlignment = Enum.TextXAlignment.Left
+AnalysisText.TextYAlignment = Enum.TextYAlignment.Top
+AnalysisText.TextWrapped = true
+AnalysisText.Parent = AnalysisOutput
+
 local btnScan = Instance.new("TextButton")
+btnScan.Position = UDim2.new(0, 0, 0, 190)
 btnScan.Size = UDim2.new(1, 0, 0, 40)
 btnScan.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
 btnScan.Text = "Start Full Analysis (Prints to F9 Console)"
@@ -1298,43 +1351,62 @@ btnScan.Parent = GameInfoTab
 Instance.new("UICorner", btnScan).CornerRadius = UDim.new(0, 6)
 
 btnScan.MouseButton1Click:Connect(function()
-    print("=== STARTING FULL GAME ANALYSIS ===")
-    print("1. Workspace Vehicles:")
+    local logData = "=== STARTING FULL GAME ANALYSIS ===\n"
+    logData = logData .. "1. Workspace Vehicles:\n"
     local vehicles = 0
     for _, v in ipairs(Workspace:GetDescendants()) do
         if v:IsA("VehicleSeat") then
             vehicles = vehicles + 1
             local model = v:FindFirstAncestorWhichIsA("Model")
-            print(" - Vehicle found: " .. (model and model.Name or "Unknown") .. " at " .. tostring(v.Position))
+            logData = logData .. " - Vehicle found: " .. (model and model.Name or "Unknown") .. " at " .. tostring(v.Position) .. "\n"
         end
     end
-    print("Total vehicles detected: " .. vehicles)
+    logData = logData .. "Total vehicles detected: " .. vehicles .. "\n\n"
     
-    print("2. Remotes in ReplicatedStorage:")
+    logData = logData .. "2. Remotes in ReplicatedStorage:\n"
     for _, v in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
         if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            print(" - Remote: " .. v.Name .. " Type: " .. v.ClassName)
+            logData = logData .. " - Remote: " .. v.Name .. " Type: " .. v.ClassName .. "\n"
         end
     end
+    logData = logData .. "\n"
     
-    print("3. Player GUI Buttons (Shop, Events):")
+    logData = logData .. "3. Player GUI Buttons (Shop, Events):\n"
     for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
         if obj:IsA("TextButton") or obj:IsA("ImageButton") then
             local pName = obj.Parent and obj.Parent.Name or ""
-            print(" - Button: " .. obj.Name .. " (Text: " .. tostring(obj:IsA("TextButton") and obj.Text or "") .. ") inside " .. pName)
+            local txt = obj:IsA("TextButton") and obj.Text or ""
+            logData = logData .. " - Button: " .. obj.Name .. " (Text: " .. tostring(txt) .. ") inside " .. pName .. "\n"
         end
     end
+    logData = logData .. "\n"
     
-    print("4. Case/Chest detection in Workspace:")
+    logData = logData .. "4. Case/Chest detection in Workspace:\n"
     local cases = 0
     for _, v in ipairs(Workspace:GetDescendants()) do
-        if v:IsA("BasePart") and (v.Name:lower():find("case") or v.Name:lower():find("chest") or v.Name:lower():find("box")) then
+        if v:IsA("BasePart") and (v.Name:lower():find("case") or v.Name:lower():find("chest") or v.Name:lower():find("box") or v.Name:lower():find("multiplier")) then
             cases = cases + 1
-            print(" - Case/Chest found: " .. v.Name .. " at " .. tostring(v.Position))
+            logData = logData .. " - Case/Chest/Multiplier found: " .. v.Name .. " at " .. tostring(v.Position) .. "\n"
         end
     end
-    print("Total Cases detected: " .. cases)
-    print("=== ANALYSIS COMPLETE ===")
+    logData = logData .. "Total Cases detected: " .. cases .. "\n"
+    logData = logData .. "=== ANALYSIS COMPLETE ==="
+    
+    print(logData)
+    AnalysisText.Text = logData
+    AnalysisText.Size = UDim2.new(1, -10, 0, 1000) -- Expand text label
+    AnalysisOutput.CanvasSize = UDim2.new(0, 0, 0, 1000) -- Expand scroll
+    
+    if setclipboard then
+        setclipboard(logData)
+        local oldText = btnScan.Text
+        btnScan.Text = _t("CopyLogs") or "Copied!"
+        btnScan.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        task.delay(2, function()
+            btnScan.Text = oldText
+            btnScan.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
+        end)
+    end
 end)
 
 
