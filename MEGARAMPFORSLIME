@@ -978,14 +978,47 @@ task.spawn(function()
                     end
                 end
                 
-                -- 2. Спавн машины -> спокойная езда вниз по рампе от старта (0, 124, -1537) до конца трамплина (5, 101, -1205)
+                -- 2. Спавн машины -> реальная езда вниз по рампе от старта (0, 124, -1537) до конца трамплина (5, 101, -1205)
                 if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
                         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
                         
-                        -- Плавный спуск по рампе (3 секунды едем до конца трамплина)
-                        safeMove(carPos, jumpPos, 3.0)
+                        -- Езда по рампе до конца трамплина (5, 101, -1205)
+                        local driveStartTime = tick()
+                        while isAutoFarmEnabled() and (tick() - driveStartTime) < 5.0 do
+                            local currRoot, currType, currModel = getCharRoot(false)
+                            if not currRoot then break end
+                            
+                            local char = LocalPlayer.Character
+                            local hum = char and char:FindFirstChild("Humanoid")
+                            if hum and hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
+                                pcall(function()
+                                    hum.SeatPart.ThrottleFloat = 1
+                                    hum.SeatPart.SteerFloat = 0
+                                end)
+                            end
+                            
+                            if currRoot.Position.Z >= jumpPos.Z - 5 or (currRoot.Position - jumpPos).Magnitude < 12 then
+                                break
+                            end
+                            
+                            local forwardVec = Vector3.new(jumpPos.X - currRoot.Position.X, 0, jumpPos.Z - currRoot.Position.Z)
+                            if forwardVec.Magnitude > 0.1 then
+                                local dir = forwardVec.Unit
+                                if currType == "Vehicle" and currModel then
+                                    for _, p in ipairs(currModel:GetDescendants()) do
+                                        if p:IsA("BasePart") then
+                                            p.AssemblyLinearVelocity = Vector3.new(dir.X * 60, math.min(p.AssemblyLinearVelocity.Y, 0), dir.Z * 60)
+                                        end
+                                    end
+                                else
+                                    currRoot.AssemblyLinearVelocity = Vector3.new(dir.X * 60, math.min(currRoot.AssemblyLinearVelocity.Y, 0), dir.Z * 60)
+                                end
+                            end
+                            
+                            task.wait(0.03)
+                        end
                         
                         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
                         
