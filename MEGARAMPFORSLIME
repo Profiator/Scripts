@@ -1099,11 +1099,11 @@ task.spawn(function()
                     local function slideTo(targetPos, duration)
                         local startPos = car.PrimaryPart and car.PrimaryPart.Position or seat.Position
                         local t = 0
+                        local realVel = (targetPos - startPos) / duration
                         
-                        -- Add a body velocity to prevent falling down between frames
                         local bv = Instance.new("BodyVelocity")
                         bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-                        bv.Velocity = Vector3.new(0, 0, 0)
+                        bv.Velocity = realVel
                         bv.Parent = seat
                         
                         while t < duration and isAutoFarmEnabled() do
@@ -1125,13 +1125,16 @@ task.spawn(function()
                             for _, p in ipairs(car:GetDescendants()) do
                                 if p:IsA("BasePart") then
                                     p.CanCollide = false
-                                    p.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                                    p.AssemblyLinearVelocity = realVel
                                     p.AssemblyAngularVelocity = Vector3.new(0,0,0)
                                 end
                             end
                             if char then
                                 for _, p in ipairs(char:GetDescendants()) do
-                                    if p:IsA("BasePart") then p.CanCollide = false end
+                                    if p:IsA("BasePart") then 
+                                        p.CanCollide = false
+                                        p.AssemblyLinearVelocity = realVel
+                                    end
                                 end
                             end
                         end
@@ -1141,19 +1144,20 @@ task.spawn(function()
                     -- Trace the exact floor path to avoid the anti-cheat high-fly kill brick
                     if isAutoFarmEnabled() then
                         logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                        slideTo(pts[1], 0.1)
+                        slideTo(pts[1], 0.2)
                     end
-                    if isAutoFarmEnabled() then slideTo(pts[2], 0.15) end
+                    if isAutoFarmEnabled() then slideTo(pts[2], 0.2) end
                     if isAutoFarmEnabled() then slideTo(pts[3], 0.2) end
-                    if isAutoFarmEnabled() then slideTo(pts[4], 0.15) end
+                    if isAutoFarmEnabled() then slideTo(pts[4], 0.2) end
                     
                     -- From the end of the ramp, fly to the multipliers
+                    -- Increase duration so it doesn't skip touch events by moving too fast
                     if isAutoFarmEnabled() then
                         logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                        slideTo(pts[5], 0.25)
+                        slideTo(pts[5], 0.8)
                     end
                     if isAutoFarmEnabled() then
-                        slideTo(pts[6], 0.25)
+                        slideTo(pts[6], 1.2)
                     end
                     
                     for _, p in ipairs(car:GetDescendants()) do
