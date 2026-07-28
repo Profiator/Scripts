@@ -1070,8 +1070,8 @@ task.spawn(function()
                         Vector3.new(-1, 115, -1498),
                         Vector3.new(-1, 63, -1379),
                         Vector3.new(-4, 76, -1296),
-                        Vector3.new(8, 76, 500),
-                        Vector3.new(8, 3, 2803)
+                        Vector3.new(3, 44, 742),
+                        Vector3.new(10, 12, 2781)
                     }
                     
                     local function slideTo(targetPos, duration)
