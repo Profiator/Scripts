@@ -798,15 +798,21 @@ task.spawn(function()
         BalanceDisplayLabel.Text = "  💰 " .. formatNum(coins) .. " | ⚡ " .. formatNum(eventCoins)
         
         if isAutoBuyEventEnabled() then
-            -- Look for event shop purchase buttons and fire them, wait based on timer
             pcall(function()
+                -- Fire EventShopAction remote if it exists
+                local rs = game:GetService("ReplicatedStorage")
+                local eventAction = rs:FindFirstChild("EventShopAction", true)
+                if eventAction and eventAction:IsA("RemoteEvent") then
+                    eventAction:FireServer()
+                end
+                
+                -- Fallback to UI clicking
                 for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
                     if obj:IsA("TextButton") or obj:IsA("ImageButton") then
                         local txt = ""
                         if obj:IsA("TextButton") then txt = (obj.Text or ""):lower() end
                         local name = obj.Name:lower()
-                        if txt:find("buy") or txt:find("купить") or txt:find("purchase") or name:find("buy") then
-                            -- Only attempt if visible
+                        if txt:find("buy") or txt:find("купить") or txt:find("purchase") or name:find("buy") or name:find("eventaction") then
                             if obj.Visible and obj.Parent and obj.Parent.Visible then
                                 if getconnections then
                                     for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
@@ -953,7 +959,7 @@ task.spawn(function()
                         end
                         local name = obj.Name:lower()
                         
-                        if txt:find("открыть") or txt:find("open") or txt:find("claim") or txt:find("забрать") or txt:find("spin") or txt:find("крутить") or txt:find("skip") or txt:find("пропустить") or txt:find("кейсы") or txt:find("case") or txt:find("box") or txt:find("chest") or txt:find("next") or txt:find("далее") or txt:find("x") or txt:find("х") or txt:find("close") or txt:find("закрыть") or name:find("open") or name:find("claim") or name:find("case") or name:find("close") or name:find("skip") then
+                        if txt:find("открыть") or txt:find("open") or txt:find("claim") or txt:find("забрать") or txt:find("spin") or txt:find("крутить") or txt:find("skip") or txt:find("пропустить") or txt:find("кейсы") or txt:find("case") or txt:find("box") or txt:find("chest") or txt:find("next") or txt:find("далее") or txt:find("x") or txt:find("х") or txt:find("close") or txt:find("закрыть") or name:find("open") or name:find("claim") or name:find("case") or name:find("close") or name:find("skip") or name == "openboxbutton" then
                             local isVis = true
                             local curr = obj
                             while curr and curr:IsA("GuiObject") do
@@ -1025,16 +1031,20 @@ task.spawn(function()
                 end
             end)
             
-            -- 3. Fire all likely RemoteEvents for cases/spins to skip animations
+            -- 3. Fire all likely RemoteEvents for cases/spins/checkpoints to skip animations
             pcall(function()
-                for _, remote in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-                    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                        local rName = remote.Name:lower()
-                        if rName:find("open") or rName:find("case") or rName:find("spin") or rName:find("claim") or rName:find("reward") then
-                            if remote:IsA("RemoteEvent") then
-                                remote:FireServer()
-                            end
-                        end
+                local rs = game:GetService("ReplicatedStorage")
+                local cpRemote = rs:FindFirstChild("CheckpointLuckUpdate", true)
+                if cpRemote and cpRemote:IsA("RemoteEvent") then
+                    -- We don't know the exact args, but firing it might help trigger the UI
+                    -- cpRemote:FireServer() 
+                end
+                
+                local specificRemotes = {"OpenBoxClick", "EndBoxReveal", "SlimeReveal", "ManageSlimeOpen", "StartBoxReveal", "BoxStarsReveal"}
+                for _, rName in ipairs(specificRemotes) do
+                    local r = rs:FindFirstChild(rName, true)
+                    if r and r:IsA("RemoteEvent") then
+                        r:FireServer()
                     end
                 end
             end)
