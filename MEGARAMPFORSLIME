@@ -848,7 +848,7 @@ local function executeFinishClicker(maxSeconds)
                     end
                     local name = obj.Name:lower()
                     
-                    if txt:find("открыть") or txt:find("open") or txt:find("claim") or txt:find("забрать") or txt:find("spin") or txt:find("крутить") or txt:find("skip") or txt:find("пропустить") or txt:find("кейсы") or txt:find("case") or txt:find("box") or txt:find("chest") or txt:find("нажмите") or txt:find("click") or txt:find("next") or txt:find("далее") or name:find("open") or name:find("claim") or name:find("case") then
+                    if txt:find("открыть") or txt:find("open") or txt:find("claim") or txt:find("забрать") or txt:find("spin") or txt:find("крутить") or txt:find("skip") or txt:find("пропустить") or txt:find("кейсы") or txt:find("case") or txt:find("box") or txt:find("chest") or txt:find("нажмите") or txt:find("click") or txt:find("next") or txt:find("далее") or txt:find("x") or txt:find("х") or txt:find("close") or txt:find("закрыть") or name:find("open") or name:find("claim") or name:find("case") or name:find("close") or name:find("x") then
                         local isVis = true
                         local curr = obj
                         while curr and curr:IsA("GuiObject") do
@@ -876,12 +876,24 @@ local function executeFinishClicker(maxSeconds)
             end
         end)
         
-        -- 3. Trigger nearby ProximityPrompts
+        -- 3. Trigger nearby ProximityPrompts and Multipliers
         pcall(function()
+            local root = getCharRoot(false)
             for _, prompt in ipairs(Workspace:GetDescendants()) do
                 if prompt:IsA("ProximityPrompt") and prompt.Enabled then
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
+                    end
+                elseif root and prompt:IsA("BasePart") then
+                    local pName = prompt.Name:lower()
+                    if pName:find("x%d") or pName:find("multiplier") then
+                        if (prompt.Position - root.Position).Magnitude < 150 then
+                            if firetouchinterest then
+                                firetouchinterest(root, prompt, 0)
+                                task.wait(0.01)
+                                firetouchinterest(root, prompt, 1)
+                            end
+                        end
                     end
                 end
             end
@@ -978,7 +990,7 @@ task.spawn(function()
                     end
                 end
                 
-                -- 2. Спавн машины -> реальная езда вниз по рампе от старта (0, 124, -1537) до конца трамплина (5, 101, -1205)
+                -- 2. Спавн машины -> езда вниз по рампе от старта (0, 124, -1537) до конца трамплина (5, 101, -1205)
                 if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
@@ -986,8 +998,8 @@ task.spawn(function()
                         
                         -- Езда по рампе до конца трамплина (5, 101, -1205)
                         local driveStartTime = tick()
-                        while isAutoFarmEnabled() and (tick() - driveStartTime) < 5.0 do
-                            local currRoot, currType, currModel = getCharRoot(false)
+                        while isAutoFarmEnabled() and (tick() - driveStartTime) < 8.0 do
+                            local currRoot = getCharRoot(false)
                             if not currRoot then break end
                             
                             local char = LocalPlayer.Character
@@ -999,22 +1011,8 @@ task.spawn(function()
                                 end)
                             end
                             
-                            if currRoot.Position.Z >= jumpPos.Z - 5 or (currRoot.Position - jumpPos).Magnitude < 12 then
+                            if currRoot.Position.Z >= jumpPos.Z - 10 then
                                 break
-                            end
-                            
-                            local forwardVec = Vector3.new(jumpPos.X - currRoot.Position.X, 0, jumpPos.Z - currRoot.Position.Z)
-                            if forwardVec.Magnitude > 0.1 then
-                                local dir = forwardVec.Unit
-                                if currType == "Vehicle" and currModel then
-                                    for _, p in ipairs(currModel:GetDescendants()) do
-                                        if p:IsA("BasePart") then
-                                            p.AssemblyLinearVelocity = Vector3.new(dir.X * 60, math.min(p.AssemblyLinearVelocity.Y, 0), dir.Z * 60)
-                                        end
-                                    end
-                                else
-                                    currRoot.AssemblyLinearVelocity = Vector3.new(dir.X * 60, math.min(currRoot.AssemblyLinearVelocity.Y, 0), dir.Z * 60)
-                                end
                             end
                             
                             task.wait(0.03)
@@ -1033,18 +1031,17 @@ task.spawn(function()
                             local hoverEnd = Vector3.new(endPos.X, flyHeight, endPos.Z)
                             
                             local forwardDir = (hoverMid - startFlyPos).Unit
-                            local highVel = forwardDir * 500000
                             
                             -- Одновременный подъем и полёт прямо через объекты multipliers (до 500,000) за 2-3 секунды
-                            safeMove(startFlyPos, hoverMid, 1.2, highVel)
+                            safeMove(startFlyPos, hoverMid, 1.0)
                             
                             if isAutoFarmEnabled() then
-                                safeMove(hoverMid, hoverEnd, 1.3, highVel)
+                                safeMove(hoverMid, hoverEnd, 1.0)
                             end
                             
                             -- Спуск на финиш
                             if isAutoFarmEnabled() then
-                                safeMove(hoverEnd, endPos, 0.4)
+                                safeMove(hoverEnd, endPos, 0.5)
                                 teleportTo(endPos, true)
                             end
                             
