@@ -978,29 +978,14 @@ task.spawn(function()
                     end
                 end
                 
-                -- 2. Спавн машины -> обычный разгон ЕЗДОЙ на W по земле до КОНЦА трамплина (5, 101, -1205)
+                -- 2. Спавн машины -> спокойная езда вниз по рампе от старта (0, 124, -1537) до конца трамплина (5, 101, -1205)
                 if isAutoFarmEnabled() then
                     local root = getCharRoot(false)
                     if root then
                         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
                         
-                        -- Едем по рампе на земле до Z >= -1205
-                        local driveStart = tick()
-                        while isAutoFarmEnabled() and (tick() - driveStart) < 8.0 do
-                            root = getCharRoot(false)
-                            if not root then break end
-                            
-                            local char = LocalPlayer.Character
-                            local hum = char and char:FindFirstChild("Humanoid")
-                            if hum and hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
-                                pcall(function() hum.SeatPart.ThrottleFloat = 1 end)
-                            end
-                            
-                            if root.Position.Z >= jumpPos.Z - 10 then
-                                break
-                            end
-                            task.wait(0.03)
-                        end
+                        -- Плавный спуск по рампе (3 секунды едем до конца трамплина)
+                        safeMove(carPos, jumpPos, 3.0)
                         
                         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
                         
@@ -1123,7 +1108,7 @@ RunService.RenderStepped:Connect(function()
                 
                 if root.Name ~= "HumanoidRootPart" then
                     flyBG.P = 9e6
-                    flyBG.D = 1000
+                    flyBG.D = 1000 
                     root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 end
                 
