@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
@@ -41,8 +42,7 @@ local T = {
         TimerSelect = "Таймер события (сек)",
         BalanceDisplay = "Баланс: 0 | Монеты: 0",
         PlayersLabel = "ИГРОКИ (ESP)",
-        ESP = "Включить ESP (Подсветка игроков)",
-        DestroyPlayers = "Удалить игроков (Локальный Кик)"
+        ESP = "Включить ESP (Подсветка игроков)"
     },
     EN = {
         Title = "MEGA RAMP FOR SLIME",
@@ -66,8 +66,7 @@ local T = {
         TimerSelect = "Event Timer (sec)",
         BalanceDisplay = "Balance: 0 | Coins: 0",
         PlayersLabel = "PLAYERS (ESP)",
-        ESP = "Enable ESP (Highlight)",
-        DestroyPlayers = "Destroy Players (Local Kick)"
+        ESP = "Enable ESP (Highlight)"
     },
     ZH = {
         Title = "MEGA RAMP FOR SLIME",
@@ -91,8 +90,7 @@ local T = {
         TimerSelect = "活动计时器（秒）",
         BalanceDisplay = "余额: 0 | 金币: 0",
         PlayersLabel = "玩家 (ESP)",
-        ESP = "启用 ESP (高亮)",
-        DestroyPlayers = "删除玩家 (本地踢出)"
+        ESP = "启用 ESP (高亮)"
     }
 }
 local curLang = "RU"
@@ -280,6 +278,11 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 10)
 UICorner.Parent = MainFrame
 
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(50, 50, 60)
+UIStroke.Thickness = 2
+UIStroke.Parent = MainFrame
+
 -- Topbar
 local Topbar = Instance.new("Frame")
 Topbar.Size = UDim2.new(1, 0, 0, 40)
@@ -419,7 +422,13 @@ NoBtn.ZIndex = 11
 NoBtn.Parent = ConfirmBox
 Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 6)
 
-CloseBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = true end)
+CloseBtn.MouseButton1Click:Connect(function()
+    if isMinimized then
+        ScreenGui:Destroy()
+    else
+        ConfirmFrame.Visible = true
+    end
+end)
 NoBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = false end)
 YesBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
@@ -444,6 +453,20 @@ local function createToggle(text)
     Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     Frame.Parent = Container
     Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+
+    Frame.MouseEnter:Connect(function()
+        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
+    end)
+    Frame.MouseLeave:Connect(function()
+        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
+    end)
+
+    Frame.MouseEnter:Connect(function()
+        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
+    end)
+    Frame.MouseLeave:Connect(function()
+        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
+    end)
 
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -60, 1, 0)
@@ -1131,7 +1154,6 @@ end)
 -- PLAYERS (ESP)
 createLabel(_t("PlayersLabel"))
 local isESPEnabled = createToggle(_t("ESP"))
-local isDestroyPlayersEnabled = createToggle(_t("DestroyPlayers"))
 
 local espHighlights = {}
 
@@ -1158,13 +1180,7 @@ RunService.RenderStepped:Connect(function()
         table.clear(espHighlights)
     end
     
-    if isDestroyPlayersEnabled() then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character then
-                player.Character:Destroy()
-            end
-        end
-    end
+
 end)
 
 Players.PlayerRemoving:Connect(function(player)
