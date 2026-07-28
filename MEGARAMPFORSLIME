@@ -1034,9 +1034,11 @@ task.spawn(function()
                     task.wait(0.2)
                     for _, v in ipairs(Workspace:GetDescendants()) do
                         if v:IsA("VehicleSeat") and (v.Position - spawnPos.Position).Magnitude < 100 then
-                            v:Sit(hum)
-                            task.wait(0.2)
-                            break
+                            if v.Occupant == nil then
+                                v:Sit(hum)
+                                task.wait(0.2)
+                                break
+                            end
                         end
                     end
                 else
@@ -1046,17 +1048,29 @@ task.spawn(function()
                     
                     local p1 = Vector3.new(0, 125, -1537)
                     local p2 = Vector3.new(5, 102, -1205)
-                    local p3 = Vector3.new(5, 284, -363)
+                    local p3 = Vector3.new(5, 50, -363)
                     local p4 = Vector3.new(8, 3, 2803)
                     
                     local function slideTo(targetPos, duration)
                         local startPos = car.PrimaryPart and car.PrimaryPart.Position or seat.Position
                         local t = 0
+                        local params = RaycastParams.new()
+                        params.FilterDescendantsInstances = {car, char}
+                        params.FilterType = Enum.RaycastFilterType.Exclude
+                        
                         while t < duration and isAutoFarmEnabled() do
                             local dt = RunService.Heartbeat:Wait()
                             t = t + dt
                             local alpha = math.clamp(t / duration, 0, 1)
                             local currPos = startPos:Lerp(targetPos, alpha)
+                            
+                            -- Raycast to keep the car glued to the floor
+                            local rayStart = Vector3.new(currPos.X, currPos.Y + 300, currPos.Z)
+                            local raycastResult = Workspace:Raycast(rayStart, Vector3.new(0, -600, 0), params)
+                            
+                            if raycastResult then
+                                currPos = Vector3.new(currPos.X, raycastResult.Position.Y + 4, currPos.Z)
+                            end
                             
                             local lookAt = Vector3.new(targetPos.X, currPos.Y, targetPos.Z)
                             local newCF
@@ -1083,7 +1097,7 @@ task.spawn(function()
                         end
                     end
                     
-                    -- Smoothly fly through the multipliers (Very Fast)
+                    -- Smoothly drive on the floor through the multipliers (Very Fast)
                     slideTo(p2, 0.4)
                     slideTo(p3, 0.4)
                     slideTo(p4, 0.4)
