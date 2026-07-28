@@ -37,10 +37,12 @@ local T = {
         No = "Нет",
         AFInfo = "Старт: 0, 124, -1537 | Конец рампы: 5, 101, -1205 | Финиш: 8, 3, 2803",
         EventShop = "МАГАЗИН СОБЫТИЙ & БАЛАНС",
-        SpoofBalance = "Накрутить визуал баланс (Скрыть траты)",
-        AutoBuyEvent = "Авто-покупка в событии без трат",
+        AutoBuyEvent = "Авто-покупка в событии",
         TimerSelect = "Таймер события (сек)",
-        BalanceDisplay = "Баланс: 0 | Монеты: 0"
+        BalanceDisplay = "Баланс: 0 | Монеты: 0",
+        PlayersLabel = "ИГРОКИ (ESP)",
+        ESP = "Включить ESP (Подсветка игроков)",
+        DestroyPlayers = "Удалить игроков (Локальный Кик)"
     },
     EN = {
         Title = "MEGA RAMP FOR SLIME",
@@ -60,10 +62,12 @@ local T = {
         No = "No",
         AFInfo = "Start: 0, 124, -1537 | Ramp End: 5, 101, -1205 | Finish: 8, 3, 2803",
         EventShop = "EVENT SHOP & BALANCE",
-        SpoofBalance = "Visual Balance Spoof (Hide Spends)",
-        AutoBuyEvent = "Auto-Buy Event Items (Bypass)",
+        AutoBuyEvent = "Auto-Buy Event Items",
         TimerSelect = "Event Timer (sec)",
-        BalanceDisplay = "Balance: 0 | Coins: 0"
+        BalanceDisplay = "Balance: 0 | Coins: 0",
+        PlayersLabel = "PLAYERS (ESP)",
+        ESP = "Enable ESP (Highlight)",
+        DestroyPlayers = "Destroy Players (Local Kick)"
     },
     ZH = {
         Title = "MEGA RAMP FOR SLIME",
@@ -83,10 +87,12 @@ local T = {
         No = "否",
         AFInfo = "起点: 0, 124, -1537 | 坡道终点: 5, 101, -1205 | 终点: 8, 3, 2803",
         EventShop = "活动商店与余额",
-        SpoofBalance = "视觉余额欺骗（隐藏支出）",
-        AutoBuyEvent = "自动购买活动物品（绕过）",
+        AutoBuyEvent = "自动购买活动物品",
         TimerSelect = "活动计时器（秒）",
-        BalanceDisplay = "余额: 0 | 金币: 0"
+        BalanceDisplay = "余额: 0 | 金币: 0",
+        PlayersLabel = "玩家 (ESP)",
+        ESP = "启用 ESP (高亮)",
+        DestroyPlayers = "删除玩家 (本地踢出)"
     }
 }
 local curLang = "RU"
@@ -215,7 +221,7 @@ pcall(function()
                 return nil
             elseif method == "FireServer" or method == "InvokeServer" then
                 local name = tostring(self):lower()
-                if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") or name:find("report") or name:find("crash") or name:find("error") or name:find("suspicious") or name:find("exploit") then
+                if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") or name:find("report") or name:find("crash") or name:find("error") or name:find("suspicious") or name:find("exploit") or name:find("admin") then
                     return nil
                 end
             elseif method == "FindFirstChild" or method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
@@ -621,7 +627,6 @@ AutoFarmInfo.TextSize = 12
 
 -- EVENT SHOP & BALANCE
 createLabel(_t("EventShop"))
-local isSpoofBalanceEnabled = createToggle(_t("SpoofBalance"))
 local isAutoBuyEventEnabled = createToggle(_t("AutoBuyEvent"))
 local getEventTimer = createSlider(_t("TimerSelect"), 1, 60, 5)
 
@@ -630,9 +635,10 @@ BalanceDisplayLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
 BalanceDisplayLabel.Font = Enum.Font.GothamBlack
 BalanceDisplayLabel.TextSize = 16
 
--- Event Shop Loop (Visual Spoof & Fake Buy)
+-- Event Shop Loop
 task.spawn(function()
     local formatNum = function(n)
+        if type(n) ~= "number" then return "0" end
         if n >= 1e12 then return string.format("%.2fT", n/1e12) end
         if n >= 1e9 then return string.format("%.2fB", n/1e9) end
         if n >= 1e6 then return string.format("%.2fM", n/1e6) end
@@ -640,34 +646,32 @@ task.spawn(function()
         return tostring(n)
     end
     
-    local fakedBalance = 999000000000000
-    local fakedEventCoins = 999000000
-    
     while true do
         task.wait(1)
-        if isSpoofBalanceEnabled() then
-            -- Update UI
-            local curLangLabel = _t("BalanceDisplay")
-            BalanceDisplayLabel.Text = "  [FAKE] 💰 " .. formatNum(fakedBalance) .. " | ⚡ " .. formatNum(fakedEventCoins)
-            
-            -- Try to spoof in player gui if they have standard leaderstats
-            pcall(function()
-                local ls = LocalPlayer:FindFirstChild("leaderstats")
-                if ls then
-                    for _, v in ipairs(ls:GetChildren()) do
-                        if v:IsA("IntValue") or v:IsA("NumberValue") then
-                            if v.Name:lower():find("coin") or v.Name:lower():find("money") or v.Name:lower():find("cash") then
-                                v.Value = fakedBalance
-                            elseif v.Name:lower():find("event") or v.Name:lower():find("token") then
-                                v.Value = fakedEventCoins
-                            end
+        
+        local coins = 0
+        local eventCoins = 0
+        
+        pcall(function()
+            local ls = LocalPlayer:FindFirstChild("leaderstats")
+            if ls then
+                for _, v in ipairs(ls:GetChildren()) do
+                    if v:IsA("IntValue") or v:IsA("NumberValue") then
+                        local n = v.Name:lower()
+                        if n:find("coin") or n:find("money") or n:find("cash") or n:find("balance") then
+                            coins = v.Value
+                        elseif n:find("event") or n:find("token") or n:find("gem") or n:find("point") or n:find("win") then
+                            eventCoins = v.Value
+                        else
+                            if coins == 0 then coins = v.Value
+                            elseif eventCoins == 0 then eventCoins = v.Value end
                         end
                     end
                 end
-            end)
-        else
-            BalanceDisplayLabel.Text = "  " .. _t("BalanceDisplay")
-        end
+            end
+        end)
+        
+        BalanceDisplayLabel.Text = "  💰 " .. formatNum(coins) .. " | ⚡ " .. formatNum(eventCoins)
         
         if isAutoBuyEventEnabled() then
             -- Look for event shop purchase buttons and fire them, wait based on timer
@@ -1121,6 +1125,52 @@ RunService.RenderStepped:Connect(function()
         end
     else
         stopFly()
+    end
+end)
+
+-- PLAYERS (ESP)
+createLabel(_t("PlayersLabel"))
+local isESPEnabled = createToggle(_t("ESP"))
+local isDestroyPlayersEnabled = createToggle(_t("DestroyPlayers"))
+
+local espHighlights = {}
+
+RunService.RenderStepped:Connect(function()
+    if isESPEnabled() then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                if not espHighlights[player] then
+                    local hl = Instance.new("Highlight")
+                    hl.FillColor = Color3.fromRGB(255, 0, 0)
+                    hl.FillTransparency = 0.5
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.Parent = player.Character
+                    espHighlights[player] = hl
+                elseif espHighlights[player].Parent ~= player.Character then
+                    espHighlights[player].Parent = player.Character
+                end
+            end
+        end
+    else
+        for player, hl in pairs(espHighlights) do
+            if hl and hl.Parent then hl:Destroy() end
+        end
+        table.clear(espHighlights)
+    end
+    
+    if isDestroyPlayersEnabled() then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                player.Character:Destroy()
+            end
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if espHighlights[player] then
+        espHighlights[player]:Destroy()
+        espHighlights[player] = nil
     end
 end)
 
