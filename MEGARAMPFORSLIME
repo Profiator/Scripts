@@ -1031,11 +1031,11 @@ task.spawn(function()
                         char.HumanoidRootPart.CFrame = spawnPos
                         char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
                     end
-                    task.wait(0.5)
+                    task.wait(0.2)
                     for _, v in ipairs(Workspace:GetDescendants()) do
                         if v:IsA("VehicleSeat") and (v.Position - spawnPos.Position).Magnitude < 100 then
                             v:Sit(hum)
-                            task.wait(0.5)
+                            task.wait(0.2)
                             break
                         end
                     end
@@ -1044,37 +1044,55 @@ task.spawn(function()
                     local rs = game:GetService("ReplicatedStorage")
                     pcall(function() rs:FindFirstChild("ClientCarLaunch", true):FireServer() end)
                     
-                    local c1 = CFrame.new(0, 125, -1537)
-                    local c2 = CFrame.new(5, 102, -1205)
-                    local c3 = CFrame.new(5, 284, -363)
-                    local c4 = CFrame.new(8, 3, 2803)
+                    local p1 = Vector3.new(0, 125, -1537)
+                    local p2 = Vector3.new(5, 102, -1205)
+                    local p3 = Vector3.new(5, 284, -363)
+                    local p4 = Vector3.new(8, 3, 2803)
                     
-                    local function slideTo(target, duration)
-                        local start = car.PrimaryPart and car.PrimaryPart.CFrame or seat.CFrame
+                    local function slideTo(targetPos, duration)
+                        local startPos = car.PrimaryPart and car.PrimaryPart.Position or seat.Position
                         local t = 0
                         while t < duration and isAutoFarmEnabled() do
-                            local dt = task.wait()
+                            local dt = RunService.Heartbeat:Wait()
                             t = t + dt
                             local alpha = math.clamp(t / duration, 0, 1)
-                            car:PivotTo(start:Lerp(target, alpha))
+                            local currPos = startPos:Lerp(targetPos, alpha)
+                            
+                            local lookAt = Vector3.new(targetPos.X, currPos.Y, targetPos.Z)
+                            local newCF
+                            if (lookAt - currPos).Magnitude > 0.1 then
+                                newCF = CFrame.new(currPos, lookAt)
+                            else
+                                newCF = CFrame.new(currPos) * (car.PrimaryPart and car.PrimaryPart.CFrame.Rotation or seat.CFrame.Rotation)
+                            end
+                            
+                            car:PivotTo(newCF)
+                            
                             for _, p in ipairs(car:GetDescendants()) do
                                 if p:IsA("BasePart") then
+                                    p.CanCollide = false
                                     p.AssemblyLinearVelocity = Vector3.new(0,0,0)
                                     p.AssemblyAngularVelocity = Vector3.new(0,0,0)
+                                end
+                            end
+                            if char then
+                                for _, p in ipairs(char:GetDescendants()) do
+                                    if p:IsA("BasePart") then p.CanCollide = false end
                                 end
                             end
                         end
                     end
                     
-                    -- Smoothly fly through the multipliers
-                    slideTo(c2, 1.5)
-                    slideTo(c3, 1.5)
-                    slideTo(c4, 1.5)
+                    -- Smoothly fly through the multipliers (Very Fast)
+                    slideTo(p2, 0.4)
+                    slideTo(p3, 0.4)
+                    slideTo(p4, 0.4)
                     
                     -- Trigger events and UI buttons at the end
-                    for i = 1, 5 do
-                        if not isAutoFarmEnabled() then break end
-                        task.wait(0.5)
+                    local clickAttempts = 0
+                    while clickAttempts < 3 and isAutoFarmEnabled() do
+                        clickAttempts = clickAttempts + 1
+                        task.wait(0.2)
                         
                         local remotes = {
                             "OpenBoxClick", "ManageSlimeOpen", "SlimeReveal", "EndBoxReveal", "RetryRun", "StartBoxReveal", "BoxStarsReveal"
@@ -1103,8 +1121,6 @@ task.spawn(function()
                             end
                         end
                     end
-                    
-                    task.wait(1)
                 end
             end)
         end
