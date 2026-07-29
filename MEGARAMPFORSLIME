@@ -383,7 +383,7 @@ Topbar.BorderSizePixel = 0
 Topbar.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -90, 1, 0)
+Title.Size = UDim2.new(1, -170, 1, 0)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = _t("Title")
@@ -392,6 +392,31 @@ Title.TextSize = 18
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Topbar
+
+local FpsLabel = Instance.new("TextLabel")
+FpsLabel.Size = UDim2.new(0, 80, 1, 0)
+FpsLabel.Position = UDim2.new(1, -165, 0, 0)
+FpsLabel.BackgroundTransparency = 1
+FpsLabel.Text = "FPS: ..."
+FpsLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+FpsLabel.Font = Enum.Font.GothamBold
+FpsLabel.TextSize = 14
+FpsLabel.TextXAlignment = Enum.TextXAlignment.Right
+FpsLabel.Parent = Topbar
+
+local lastTick = tick()
+local frames = 0
+RunService.RenderStepped:Connect(function()
+    frames = frames + 1
+    local t = tick()
+    if t - lastTick >= 1 then
+        if ScreenGui and ScreenGui.Parent then
+            FpsLabel.Text = "FPS: " .. frames
+        end
+        frames = 0
+        lastTick = t
+    end
+end)
 
 -- Window Controls (Minimize & Close)
 local MinimizeBtn = Instance.new("TextButton")
@@ -829,7 +854,7 @@ createLabel(_t("Pets") or "PETS", ShopTab)
 local isAutoEquipEnabled = createToggle(_t("AutoEquip") or "Auto-Equip", ShopTab)
 
 task.spawn(function()
-    while true do
+    while ScreenGui and ScreenGui.Parent do
         task.wait(2)
         if isAutoEquipEnabled() then
             pcall(function()
@@ -864,7 +889,7 @@ task.spawn(function()
         return tostring(n)
     end
     
-    while true do
+    while ScreenGui and ScreenGui.Parent do
         task.wait(1)
         
         local coins = 0
@@ -1059,7 +1084,7 @@ local function logFormat(msg)
 end
 
 task.spawn(function()
-    while true do
+    while ScreenGui and ScreenGui.Parent do
         task.wait(0.1)
         if isAutoFarmEnabled() then
             pcall(function()
@@ -1402,7 +1427,8 @@ end)
 -- GRAPHICS & CPU OPTIMIZATION
 createLabel("GRAPHICS & CPU SAVER", VisualsTab)
 local isCpuSaverEnabled = createToggle(_t("CpuSaver") or "CPU / GPU Saver (3D Off)", VisualsTab)
-local isLowGraphicsEnabled = createToggle(_t("LowGraphics") or "Ultra Low Graphics", VisualsTab)
+createLabel("Graphics Quality (1=Min, 21=Auto)", VisualsTab)
+local getGraphicsLevel = createSlider("Quality Level", 1, 21, 21, VisualsTab)
 
 -- Black Overlay Frame for CPU Saver
 local CpuSaverOverlay = Instance.new("Frame")
@@ -1425,7 +1451,7 @@ CpuSaverLabel.Parent = CpuSaverOverlay
 
 local was3dDisabled = false
 task.spawn(function()
-    while true do
+    while ScreenGui and ScreenGui.Parent do
         task.wait(0.5)
         local cpuActive = isCpuSaverEnabled()
         CpuSaverOverlay.Visible = cpuActive
@@ -1454,38 +1480,21 @@ task.spawn(function()
     end
 end)
 
--- Ultra Low Graphics Loop
-local wasLowGraphics = false
+-- Graphics Quality Loop
+local currentQuality = 21
 task.spawn(function()
-    while true do
+    while ScreenGui and ScreenGui.Parent do
         task.wait(1)
-        if isLowGraphicsEnabled() then
-            if not wasLowGraphics then
-                wasLowGraphics = true
-                pcall(function()
-                    settings().Rendering.QualityLevel = 1
-                    Workspace.Lighting.GlobalShadows = false
-                    Workspace.Lighting.FogEnd = 9e9
-                    for _, v in ipairs(Workspace:GetDescendants()) do
-                        if v:IsA("BasePart") then
-                            v.Material = Enum.Material.SmoothPlastic
-                            v.Reflectance = 0
-                        elseif v:IsA("Decal") or v:IsA("Texture") then
-                            v.Transparency = 1
-                        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-                            v.Enabled = false
-                        end
-                    end
-                end)
-            end
-        else
-            if wasLowGraphics then
-                wasLowGraphics = false
-                pcall(function()
+        local desired = getGraphicsLevel()
+        if desired ~= currentQuality then
+            currentQuality = desired
+            pcall(function()
+                if desired == 21 then
                     settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
-                    Workspace.Lighting.GlobalShadows = true
-                end)
-            end
+                else
+                    settings().Rendering.QualityLevel = desired
+                end
+            end)
         end
     end
 end)
@@ -1529,7 +1538,7 @@ end)
 
 -- Periodic active Anti-AFK background loop (every 30s)
 task.spawn(function()
-    while true do
+    while ScreenGui and ScreenGui.Parent do
         task.wait(30)
         if isAntiAfkEnabled() then
             pcall(function()
