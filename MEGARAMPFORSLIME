@@ -65,7 +65,9 @@ local T = {
         TpCarShop = "Магазин Машин",
         TpPaintShop = "Покрасочная",
         TpMiniParkour = "Мини-Паркур",
-        TpEventShop = "Магазин Событий"
+        TpEventShop = "Магазин Событий",
+        CpuSaver = "Энергосбережение (3D Выкл / CPU Saver)",
+        LowGraphics = "Ультра-Низкая Графика (ФПС Буст)"
     },
     EN = {
         Title = "MEGA RAMP FOR SLIME",
@@ -107,7 +109,9 @@ local T = {
         TpCarShop = "Car Shop",
         TpPaintShop = "Paint Shop",
         TpMiniParkour = "Mini Parkour",
-        TpEventShop = "Event Shop"
+        TpEventShop = "Event Shop",
+        CpuSaver = "CPU / GPU Saver (3D Off)",
+        LowGraphics = "Ultra Low Graphics (FPS Boost)"
     },
     ZH = {
         Title = "MEGA RAMP FOR SLIME",
@@ -149,7 +153,9 @@ local T = {
         TpCarShop = "汽车商店",
         TpPaintShop = "喷漆店",
         TpMiniParkour = "迷你跑酷",
-        TpEventShop = "活动商店"
+        TpEventShop = "活动商店",
+        CpuSaver = "CPU 节能模式 (禁用3D渲染)",
+        LowGraphics = "超低画质 (帧率提升)"
     }
 }
 local curLang = "RU"
@@ -1393,15 +1399,150 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
--- OTHER
+-- GRAPHICS & CPU OPTIMIZATION
+createLabel("GRAPHICS & CPU SAVER", VisualsTab)
+local isCpuSaverEnabled = createToggle(_t("CpuSaver") or "CPU / GPU Saver (3D Off)", VisualsTab)
+local isLowGraphicsEnabled = createToggle(_t("LowGraphics") or "Ultra Low Graphics", VisualsTab)
+
+-- Black Overlay Frame for CPU Saver
+local CpuSaverOverlay = Instance.new("Frame")
+CpuSaverOverlay.Name = "CpuSaverOverlay"
+CpuSaverOverlay.Size = UDim2.new(1, 0, 1, 0)
+CpuSaverOverlay.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+CpuSaverOverlay.Visible = false
+CpuSaverOverlay.ZIndex = 999
+CpuSaverOverlay.Parent = ScreenGui
+
+local CpuSaverLabel = Instance.new("TextLabel")
+CpuSaverLabel.Size = UDim2.new(1, 0, 0, 80)
+CpuSaverLabel.Position = UDim2.new(0, 0, 0.5, -40)
+CpuSaverLabel.BackgroundTransparency = 1
+CpuSaverLabel.Text = "⚡ CPU / GPU SAVER ACTIVE\n3D Rendering Disabled | Maximum Performance & Anti-Kick"
+CpuSaverLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+CpuSaverLabel.Font = Enum.Font.GothamBold
+CpuSaverLabel.TextSize = 18
+CpuSaverLabel.Parent = CpuSaverOverlay
+
+local was3dDisabled = false
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local cpuActive = isCpuSaverEnabled()
+        CpuSaverOverlay.Visible = cpuActive
+        
+        if cpuActive then
+            if not was3dDisabled then
+                was3dDisabled = true
+                pcall(function()
+                    RunService:Set3dRenderingEnabled(false)
+                end)
+                pcall(function()
+                    if setfpscap then setfpscap(15) end
+                end)
+            end
+        else
+            if was3dDisabled then
+                was3dDisabled = false
+                pcall(function()
+                    RunService:Set3dRenderingEnabled(true)
+                end)
+                pcall(function()
+                    if setfpscap then setfpscap(60) end
+                end)
+            end
+        end
+    end
+end)
+
+-- Ultra Low Graphics Loop
+local wasLowGraphics = false
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if isLowGraphicsEnabled() then
+            if not wasLowGraphics then
+                wasLowGraphics = true
+                pcall(function()
+                    settings().Rendering.QualityLevel = 1
+                    Workspace.Lighting.GlobalShadows = false
+                    Workspace.Lighting.FogEnd = 9e9
+                    for _, v in ipairs(Workspace:GetDescendants()) do
+                        if v:IsA("BasePart") then
+                            v.Material = Enum.Material.SmoothPlastic
+                            v.Reflectance = 0
+                        elseif v:IsA("Decal") or v:IsA("Texture") then
+                            v.Transparency = 1
+                        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                            v.Enabled = false
+                        end
+                    end
+                end)
+            end
+        else
+            if wasLowGraphics then
+                wasLowGraphics = false
+                pcall(function()
+                    settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+                    Workspace.Lighting.GlobalShadows = true
+                end)
+            end
+        end
+    end
+end)
+
+-- OTHER & MULTI-LAYER ANTI-AFK
 createLabel(_t("Other"), MainTab)
 local isAntiAfkEnabled = createToggle(_t("AntiAfk"), MainTab)
 
+-- Disable default Idled connections if getconnections available
+pcall(function()
+    if getconnections then
+        for _, conn in ipairs(getconnections(LocalPlayer.Idled)) do
+            if conn.Disable then conn:Disable() end
+        end
+    end
+end)
+
+-- Block LocalPlayer:Kick() calls directly
+pcall(function()
+    if hookfunction then
+        local oldKick
+        oldKick = hookfunction(LocalPlayer.Kick, function(self, ...)
+            return nil
+        end)
+    else
+        LocalPlayer.Kick = function() return nil end
+    end
+end)
+
 LocalPlayer.Idled:Connect(function()
     if isAntiAfkEnabled() then
-        VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new(0,0))
+            VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+            task.wait(0.5)
+            VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+        end)
+    end
+end)
+
+-- Periodic active Anti-AFK background loop (every 30s)
+task.spawn(function()
+    while true do
+        task.wait(30)
+        if isAntiAfkEnabled() then
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new(0,0))
+                if VirtualInputManager then
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightControl, false, game)
+                    task.wait(0.05)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightControl, false, game)
+                end
+                VirtualUser:TypeKey("0")
+            end)
+        end
     end
 end)
 
