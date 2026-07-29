@@ -9,7 +9,7 @@ end
 _G.MegaRampConnections = {}
 
 local function connectSignal(signal, callback)
-    local conn = connectSignal(signal, callback)
+    local conn = signal:Connect(callback)
     table.insert(_G.MegaRampConnections, conn)
     return conn
 end
@@ -36,6 +36,51 @@ pcall(function()
     if gethui then guiParent = gethui() end
 end)
 
+
+
+local function getCharRoot(preferVehicle)
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local humanoid = char:FindFirstChild("Humanoid")
+    if preferVehicle and humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
+        local vehicle = humanoid.SeatPart:FindFirstAncestorWhichIsA("Model")
+        if vehicle and vehicle.PrimaryPart then
+            return vehicle.PrimaryPart
+        end
+        return humanoid.SeatPart
+    end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getCar()
+    local char = LocalPlayer.Character
+    if char then
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
+            return humanoid.SeatPart:FindFirstAncestorWhichIsA("Model")
+        end
+    end
+    return nil
+end
+
+local function slideTo(targetPos, duration)
+    local root = getCharRoot(true)
+    if not root then return end
+    
+    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+    local goal = {CFrame = CFrame.new(targetPos, targetPos + root.CFrame.lookVector)}
+    
+    local t = TweenService:Create(root, tweenInfo, goal)
+    t:Play()
+    t.Completed:Wait()
+end
+
+local function teleportTo(targetPos, keepVehicle)
+    local root = getCharRoot(keepVehicle)
+    if root then
+        root.CFrame = CFrame.new(targetPos)
+    end
+end
 
 local T = {
     RU = {
@@ -897,95 +942,12 @@ connectSignal(CopyCoordsBtn.MouseButton1Click, function()
     end
 end)
 
--- AUTO-FARM
 
-
-
-
-
-
-local pathActionFrame = Instance.new("Frame")
-pathActionFrame.Size = UDim2.new(1, 0, 0, 40)
-pathActionFrame.BackgroundTransparency = 1
-pathActionFrame.Parent = MainTab
-
-local btnRecordPath = Instance.new("TextButton")
-btnRecordPath.Size = UDim2.new(0.5, -5, 1, 0)
-btnRecordPath.Position = UDim2.new(0, 0, 0, 0)
-btnRecordPath.BackgroundColor3 = Color3.fromRGB(50, 50, 150)
-btnRecordPath.Text = _t("RecordPath") or "Record Path (Rec)"
-btnRecordPath.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnRecordPath.Font = Enum.Font.GothamBold
-btnRecordPath.TextSize = 12
-btnRecordPath.Parent = pathActionFrame
-Instance.new("UICorner", btnRecordPath).CornerRadius = UDim.new(0, 6)
-
-local btnClearPath = Instance.new("TextButton")
-btnClearPath.Size = UDim2.new(0.5, -5, 1, 0)
-btnClearPath.Position = UDim2.new(0.5, 5, 0, 0)
-btnClearPath.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-btnClearPath.Text = _t("ClearPath") or "Clear Path"
-btnClearPath.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnClearPath.Font = Enum.Font.GothamBold
-btnClearPath.TextSize = 12
-btnClearPath.Parent = pathActionFrame
-Instance.new("UICorner", btnClearPath).CornerRadius = UDim.new(0, 6)
-
-local customPathPoints = {}
-local isRecordingPath = false
-local pathNodes = {}
-
-local function clearVisualPath()
-    for _, node in ipairs(pathNodes) do
-        if node and node.Parent then node:Destroy() end
-    end
-    table.clear(pathNodes)
-    table.clear(customPathPoints)
-end
-
-connectSignal(btnClearPath.MouseButton1Click, function()
-    clearVisualPath()
-    btnRecordPath.Text = _t("RecordPath") or "Record Path (Rec)"
-end)
-
-connectSignal(btnRecordPath.MouseButton1Click, function()
-    isRecordingPath = not isRecordingPath
-    if isRecordingPath then
-        btnRecordPath.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-        btnRecordPath.Text = "Recording... (Stop)"
-    else
-        btnRecordPath.BackgroundColor3 = Color3.fromRGB(50, 50, 150)
-        btnRecordPath.Text = _t("RecordPath") or "Record Path (Rec)"
-    end
-end)
-
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(0.2)
-        if isRecordingPath then
-            local root = getCharRoot(false)
-            if root then
-                local pos = root.Position
-                if #customPathPoints == 0 or (customPathPoints[#customPathPoints] - pos).Magnitude > 30 then
-                    table.insert(customPathPoints, pos)
-                    -- Visual representation
-                    local part = Instance.new("Part")
-                    part.Size = Vector3.new(3, 3, 3)
-                    part.Position = pos
-                    part.Anchored = true
-                    part.CanCollide = false
-                    part.Material = Enum.Material.Neon
-                    part.Color = Color3.fromRGB(0, 255, 150)
-                    part.Transparency = 0.5
-                    part.Parent = Workspace
-                    table.insert(pathNodes, part)
-                end
-            end
-        end
-    end
-end)
-
-
+-- FLY & SPEED
+createLabel(_t("Speed") or "SPEED & FLY", MainTab)
+local isCustomSpeed = createToggle(_t("CustomSpeed") or "Enable Custom Speed", MainTab)
+local getSpeed = createSlider(_t("SpeedSlider") or "Walk/Car Speed", 16, 300, 50, MainTab)
+local isFlyEnabled = createToggle(_t("Fly") or "Free Fly", MainTab)
 
 -- PETS
 createLabel(_t("Pets") or "PETS", ShopTab)
@@ -1327,7 +1289,7 @@ task.spawn(function()
     while ScreenGui and ScreenGui.Parent do
         task.wait(0.5)
         if isPlayingPath and #customPathPoints > 0 then
-            logFormat("[Macro] Starting Macro Execution")
+            print("[Macro] Starting Macro Execution")
             
             -- Prepare Car
             local car = getCar()
