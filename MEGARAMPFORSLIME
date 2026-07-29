@@ -412,7 +412,7 @@ pcall(function()
             if key == "JumpPower" then return 50 end
             if key == "JumpHeight" then return 7.2 end
             if key == "Transparency" and self:IsA("BasePart") then return 0 end
-            if key == "Velocity" or key == "AssemblyLinearVelocity" then return Vector3.new(0,0,0) end
+            -- Removed Velocity spoofing to fix car physics bug
             if key == "CFrame" and typeof(self) == "Instance" and self:IsA("HumanoidRootPart") then
                 -- Optional: Spoof CFrame if needed, but usually breaks the game. We leave it as is.
             end
@@ -1162,6 +1162,7 @@ connectSignal(UserInputService.InputBegan, function(input, gpe)
     end
 end)
 
+
 createLabel("MACRO PATH", MainTab)
 
 local macroActionFrame = Instance.new("Frame")
@@ -1202,134 +1203,124 @@ btnClearPath.TextSize = 12
 btnClearPath.Parent = macroActionFrame
 Instance.new("UICorner", btnClearPath).CornerRadius = UDim.new(0, 6)
 
-local getBaseSpeed = createSlider("Base Speed (10 = 1.0x)", 1, 100, 10, MainTab)
-local getAltSpeed = createSlider("Alt Speed (10 = 1.0x)", 1, 100, 10, MainTab)
-local getAltSpeedNode = createSlider("Apply Alt Speed From Node", 1, 100, 1, MainTab)
+local isLoopMacro = createToggle("Loop Macro (Infinite)", MainTab)
+local getPlaybackSpeed = createSlider("Playback Speed (10 = 1.0x)", 1, 100, 10, MainTab)
 
-local customPathPoints = {}
-local isRecordingPath = false
-local isPlayingPath = false
-local pathNodes = {}
+local macroRecords = {}
+local isRecordingMacro = false
+local isPlayingMacro = false
+local recordConnection = nil
 
-local function clearVisualPath()
-    for _, node in ipairs(pathNodes) do
-        if node and node.Parent then node:Destroy() end
-    end
-    table.clear(pathNodes)
-    table.clear(customPathPoints)
-end
-
-connectSignal(btnClearPath.MouseButton1Click, function()
-    clearVisualPath()
-end)
-
-connectSignal(btnRecordPath.MouseButton1Click, function()
-    if isPlayingPath then return end
-    isRecordingPath = not isRecordingPath
-    if isRecordingPath then
+local function updateMacroButtons()
+    if isRecordingMacro then
         btnRecordPath.Text = "Stop Rec"
         btnRecordPath.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     else
         btnRecordPath.Text = "Record (Rec)"
         btnRecordPath.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
     end
-end)
-
-connectSignal(btnPlayPath.MouseButton1Click, function()
-    if isRecordingPath or #customPathPoints == 0 then return end
-    isPlayingPath = not isPlayingPath
-    if isPlayingPath then
+    
+    if isPlayingMacro then
         btnPlayPath.Text = "Stop Macro"
         btnPlayPath.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     else
         btnPlayPath.Text = "Play Macro"
         btnPlayPath.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
     end
+end
+
+connectSignal(btnClearPath.MouseButton1Click, function()
+    if isRecordingMacro or isPlayingMacro then return end
+    macroRecords = {}
 end)
 
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(0.2)
-        if isRecordingPath then
-            local root = getCharRoot(false)
+connectSignal(btnRecordPath.MouseButton1Click, function()
+    if isPlayingMacro then return end
+    isRecordingMacro = not isRecordingMacro
+    
+    if isRecordingMacro then
+        macroRecords = {}
+        recordConnection = RunService.Heartbeat:Connect(function(dt)
+            local root = getCharRoot(true)
             if root then
-                local pos = root.Position
-                if #customPathPoints == 0 or (customPathPoints[#customPathPoints] - pos).Magnitude > 30 then
-                    table.insert(customPathPoints, pos)
-                    local part = Instance.new("Part")
-                    part.Size = Vector3.new(3, 3, 3)
-                    part.Position = pos
-                    part.Anchored = true
-                    part.CanCollide = false
-                    part.Material = Enum.Material.Neon
-                    part.Color = Color3.fromRGB(0, 255, 150)
-                    part.Transparency = 0.5
-                    part.Parent = Workspace
-                    table.insert(pathNodes, part)
-                    
-                    -- Create text label to show node number
-                    local bg = Instance.new("BillboardGui")
-                    bg.Size = UDim2.new(0, 50, 0, 50)
-                    bg.StudsOffset = Vector3.new(0, 3, 0)
-                    bg.Parent = part
-                    local tl = Instance.new("TextLabel")
-                    tl.Size = UDim2.new(1, 0, 1, 0)
-                    tl.BackgroundTransparency = 1
-                    tl.Text = tostring(#customPathPoints)
-                    tl.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    tl.TextScaled = true
-                    tl.Parent = bg
-                end
+                table.insert(macroRecords, {
+                    cframe = root.CFrame,
+                    vel = root.AssemblyLinearVelocity,
+                    rot = root.AssemblyAngularVelocity,
+                    dt = dt
+                })
             end
+        end)
+    else
+        if recordConnection then 
+            recordConnection:Disconnect() 
+            recordConnection = nil 
         end
     end
+    updateMacroButtons()
 end)
 
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(0.5)
-        if isPlayingPath and #customPathPoints > 0 then
-            print("[Macro] Starting Macro Execution")
-            
-            -- Prepare Car
-            local car = getCar()
-            if not car then
-                local spawnEvent = game:GetService("ReplicatedStorage"):FindFirstChild("SpawnCarEvent", true)
-                if spawnEvent then spawnEvent:FireServer() end
-                task.wait(1.5)
-                car = getCar()
-            end
-            
-            if car then
-                -- Follow Path
-                for i = 1, #customPathPoints do
-                    if not isPlayingPath then break end
-                    
-                    local pts = customPathPoints
-                    local dist = (i == 1) and 50 or (pts[i] - pts[i-1]).Magnitude
-                    
-                    local speedMult = (i >= getAltSpeedNode()) and (getAltSpeed() / 10) or (getBaseSpeed() / 10)
-                    if speedMult <= 0.01 then speedMult = 0.01 end
-                    
-                    local dur = math.clamp(dist / (200 * speedMult), 0.1, 2.0)
-                    
-                    slideTo(pts[i], dur)
-                end
-                
-                -- Done
-                isPlayingPath = false
-                btnPlayPath.Text = "Play Macro"
-                btnPlayPath.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-            else
-                isPlayingPath = false
-                btnPlayPath.Text = "Play Macro"
-                btnPlayPath.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-            end
+local function stopPlayback()
+    isPlayingMacro = false
+    updateMacroButtons()
+    local root = getCharRoot(true)
+    if root then 
+        root.Anchored = false 
+        -- Restore some velocity so it doesn't freeze in mid-air abruptly
+        if #macroRecords > 0 then
+            root.AssemblyLinearVelocity = macroRecords[#macroRecords].vel or Vector3.new(0,0,0)
         end
+    end
+end
+
+connectSignal(btnPlayPath.MouseButton1Click, function()
+    if isRecordingMacro or #macroRecords == 0 then return end
+    isPlayingMacro = not isPlayingMacro
+    updateMacroButtons()
+    
+    if isPlayingMacro then
+        task.spawn(function()
+            local modelToMove = nil
+            local root = getCharRoot(true)
+            
+            if not root then
+                pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("SpawnCarEvent", true):FireServer() end)
+                task.wait(1.5)
+                root = getCharRoot(true)
+            end
+            
+            if root then
+                modelToMove = root:FindFirstAncestorWhichIsA("Model")
+                root.Anchored = true
+                
+                while isPlayingMacro do
+                    for i = 1, #macroRecords do
+                        if not isPlayingMacro then break end
+                        local rec = macroRecords[i]
+                        
+                        if modelToMove and modelToMove.PrimaryPart then
+                            modelToMove:PivotTo(rec.cframe)
+                        else
+                            root.CFrame = rec.cframe
+                        end
+                        
+                        root.AssemblyLinearVelocity = rec.vel or Vector3.new(0,0,0)
+                        
+                        local speedMult = getPlaybackSpeed() / 10
+                        if speedMult < 0.1 then speedMult = 0.1 end
+                        
+                        task.wait(rec.dt / speedMult)
+                    end
+                    if not isLoopMacro() then break end
+                end
+            end
+            stopPlayback()
+        end)
     end
 end)
 
 createLabel(_t("Other"), MainTab)
+
 local isAntiAfkEnabled = createToggle(_t("AntiAfk"), MainTab)
 
 -- Disable default Idled connections if getconnections available
