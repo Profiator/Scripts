@@ -824,7 +824,7 @@ local ShopTab = createTab(_t("TabShop") or "SHOP")
 local TeleportsTab = createTab(_t("TabTeleports") or "TELEPORTS")
 local VisualsTab = createTab(_t("TabVisuals") or "VISUALS")
 local GameInfoTab = createTab(_t("TabAnalysis") or "ANALYSIS")
-local PlayersTab = createTab(_t("TabPlayers") or "PLAYERS")
+
 
 -- PROFILE
 createLabel(_t("Profile"), MainTab)
@@ -898,13 +898,11 @@ connectSignal(CopyCoordsBtn.MouseButton1Click, function()
 end)
 
 -- AUTO-FARM
-createLabel(_t("AutoFarm"), MainTab)
-local isAutoFarmEnabled = createToggle(_t("EnableAutoFarm"), MainTab)
-local AutoFarmInfo = createLabel(_t("AFInfo"), MainTab)
-AutoFarmInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
-AutoFarmInfo.TextSize = 12
-createLabel(_t("CustomPathing") or "CUSTOM PATHING", MainTab)
-local isUseCustomPath = createToggle(_t("UseCustomPath") or "Use Custom Path", MainTab)
+
+
+
+
+
 
 local pathActionFrame = Instance.new("Frame")
 pathActionFrame.Size = UDim2.new(1, 0, 0, 40)
@@ -963,27 +961,24 @@ end)
 
 task.spawn(function()
     while ScreenGui and ScreenGui.Parent do
-        task.wait(0.5)
+        task.wait(0.2)
         if isRecordingPath then
-            local char = LocalPlayer.Character
-            if char then
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if root then
-                    local pos = root.Position
-                    if #customPathPoints == 0 or (customPathPoints[#customPathPoints] - pos).Magnitude > 20 then
-                        table.insert(customPathPoints, pos)
-                        -- Visual representation
-                        local part = Instance.new("Part")
-                        part.Size = Vector3.new(2, 2, 2)
-                        part.Position = pos
-                        part.Anchored = true
-                        part.CanCollide = false
-                        part.Material = Enum.Material.Neon
-                        part.Color = Color3.fromRGB(0, 255, 150)
-                        part.Transparency = 0.5
-                        part.Parent = Workspace
-                        table.insert(pathNodes, part)
-                    end
+            local root = getCharRoot(false)
+            if root then
+                local pos = root.Position
+                if #customPathPoints == 0 or (customPathPoints[#customPathPoints] - pos).Magnitude > 30 then
+                    table.insert(customPathPoints, pos)
+                    -- Visual representation
+                    local part = Instance.new("Part")
+                    part.Size = Vector3.new(3, 3, 3)
+                    part.Position = pos
+                    part.Anchored = true
+                    part.CanCollide = false
+                    part.Material = Enum.Material.Neon
+                    part.Color = Color3.fromRGB(0, 255, 150)
+                    part.Transparency = 0.5
+                    part.Parent = Workspace
+                    table.insert(pathNodes, part)
                 end
             end
         end
@@ -1012,449 +1007,13 @@ task.spawn(function()
 end)
 
 -- EVENT SHOP & BALANCE
-createLabel(_t("EventShop"), ShopTab)
-local isAutoBuyEventEnabled = createToggle(_t("AutoBuyEvent"), ShopTab)
-local getEventTimer = createSlider(_t("TimerSelect"), 1, 60, 5, ShopTab)
-
-local BalanceDisplayLabel = createLabel(_t("BalanceDisplay"), ShopTab)
-BalanceDisplayLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
-BalanceDisplayLabel.Font = Enum.Font.GothamBlack
-BalanceDisplayLabel.TextSize = 16
-
--- Event Shop Loop
-task.spawn(function()
-    local formatNum = function(n)
-        if type(n) ~= "number" then return "0" end
-        if n >= 1e12 then return string.format("%.2fT", n/1e12) end
-        if n >= 1e9 then return string.format("%.2fB", n/1e9) end
-        if n >= 1e6 then return string.format("%.2fM", n/1e6) end
-        if n >= 1e3 then return string.format("%.2fK", n/1e3) end
-        return tostring(n)
-    end
-    
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(1)
-        
-        local coins = 0
-        local eventCoins = 0
-        
-        pcall(function()
-            local ls = LocalPlayer:FindFirstChild("leaderstats")
-            if ls then
-                for _, v in ipairs(ls:GetChildren()) do
-                    if v:IsA("IntValue") or v:IsA("NumberValue") then
-                        local n = v.Name:lower()
-                        if n:find("coin") or n:find("money") or n:find("cash") or n:find("balance") then
-                            coins = v.Value
-                        elseif n:find("event") or n:find("token") or n:find("gem") or n:find("point") or n:find("win") then
-                            eventCoins = v.Value
-                        else
-                            if coins == 0 then coins = v.Value
-                            elseif eventCoins == 0 then eventCoins = v.Value end
-                        end
-                    end
-                end
-            end
-        end)
-        
-        BalanceDisplayLabel.Text = "  💰 " .. formatNum(coins) .. " | ⚡ " .. formatNum(eventCoins)
-        
-        if isAutoBuyEventEnabled() then
-            pcall(function()
-                -- Fire EventShopAction remote if it exists
-                local rs = game:GetService("ReplicatedStorage")
-                local eventAction = rs:FindFirstChild("EventShopAction", true)
-                if eventAction and eventAction:IsA("RemoteEvent") then
-                    eventAction:FireServer()
-                end
-                
-                -- Fallback to UI clicking
-                for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                    if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                        local txt = ""
-                        if obj:IsA("TextButton") then txt = (obj.Text or ""):lower() end
-                        local name = obj.Name:lower()
-                        if txt:find("buy") or txt:find("купить") or txt:find("purchase") or name:find("buy") or name:find("eventaction") then
-                            if obj.Visible and obj.Parent and obj.Parent.Visible then
-                                if getconnections then
-                                    for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
-                                    for _, conn in ipairs(getconnections(obj.Activated)) do conn:Fire() end
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-            task.wait(getEventTimer and getEventTimer() or 5)
-        end
-    end
-end)
-
-local function getCharRoot(forPhysics)
-    local char = LocalPlayer.Character
-    if not char then return nil, "No Character" end
-    local humanoid = char:FindFirstChild("Humanoid")
-    if humanoid and humanoid.SeatPart then
-        local seat = humanoid.SeatPart
-        local vehicle = seat:FindFirstAncestorWhichIsA("Model")
-        while vehicle and vehicle.Parent and vehicle.Parent:IsA("Model") and vehicle.Parent ~= Workspace do
-            vehicle = vehicle.Parent
-        end
-        if vehicle then
-            if forPhysics then return seat, "Vehicle" end
-            return vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart") or seat, "Vehicle", vehicle
-        end
-        return seat, "Seat"
-    end
-    return char:FindFirstChild("HumanoidRootPart"), "Character"
-end
-
-local function teleportTo(pos, keepExact)
-    local root, rootType, vehicleModel = getCharRoot(false)
-    if root then
-        local rot = root.CFrame.Rotation
-        local targetCFrame = keepExact and CFrame.new(pos) * rot or CFrame.new(pos + Vector3.new(0, 3, 0)) * rot
-        
-        local char = LocalPlayer.Character
-        local humanoid = char and char:FindFirstChild("Humanoid")
-        if humanoid and humanoid.SeatPart then
-            pcall(function() humanoid.Sit = true end)
-        end
-        
-        if rootType == "Vehicle" and vehicleModel then
-            for _, part in ipairs(vehicleModel:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                    pcall(function() part.CanCollide = true end)
-                end
-            end
-            vehicleModel:PivotTo(targetCFrame)
-        else
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            root.CFrame = targetCFrame
-        end
-    end
-end
-
--- Fast movement helper
-local function safeMove(startPos, endPos, duration, forceVel)
-    local root, rootType, vehicleModel = getCharRoot(false)
-    if not root then return end
-    
-    local startTime = tick()
-    local connection
-    local finished = false
-    
-    local flatDir = Vector3.new(endPos.X - startPos.X, 0, endPos.Z - startPos.Z)
-    local dir = flatDir.Magnitude > 0.001 and flatDir.Unit or Vector3.new(0, 0, 1)
-    local calculatedVel = (endPos - startPos) / math.max(duration, 0.01)
-    local moveVelocity = forceVel or calculatedVel
-    
-    connection = connectSignal(RunService.Heartbeat, function()
-        if not isAutoFarmEnabled() then
-            finished = true
-            connection:Disconnect()
-            return
-        end
-        
-        local currentRoot, currentType, currentModel = getCharRoot(false)
-        if not currentRoot then
-            finished = true
-            connection:Disconnect()
-            return
-        end
-
-        local elapsed = tick() - startTime
-        local alpha = math.clamp(elapsed / duration, 0, 1)
-        local currentPos = startPos:Lerp(endPos, alpha)
-        
-        local cframe = CFrame.new(currentPos, currentPos + dir)
-        
-        local char = LocalPlayer.Character
-        local humanoid = char and char:FindFirstChild("Humanoid")
-        if humanoid and humanoid.SeatPart then
-            pcall(function() humanoid.Sit = true end)
-        end
-        
-        if currentType == "Vehicle" and currentModel then
-            for _, part in ipairs(currentModel:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.AssemblyLinearVelocity = moveVelocity
-                    part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                    pcall(function() part.CanCollide = true end)
-                end
-            end
-            currentModel:PivotTo(cframe)
-        else
-            currentRoot.CFrame = cframe
-            currentRoot.AssemblyLinearVelocity = moveVelocity
-            currentRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        end
-        
-        if alpha >= 1 then
-            finished = true
-            connection:Disconnect()
-        end
-    end)
-    
-    while not finished and isAutoFarmEnabled() do
-        task.wait(0.01)
-    end
-    if connection then connection:Disconnect() end
-end
-
-
--- FAST AUTO FARM & OPEN LOGIC (SMOOTH MOVEMENT)
-local function getCar()
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChild("Humanoid")
-        if hum and hum.SeatPart then
-            local model = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
-            if model and model ~= Workspace then
-                return model, hum.SeatPart
-            end
-        end
-    end
-    return nil, nil
-end
-
-local function logFormat(msg)
-    local t = os.date("%X")
-    print(t .. " -- " .. msg)
-end
-
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(0.1)
-        if isAutoFarmEnabled() then
-            pcall(function()
-                local char = LocalPlayer.Character
-                local hum = char and char:FindFirstChild("Humanoid")
-                local car, seat = getCar()
-                
-                if not car then
-                    logFormat("[AeroBalloon] 🛠️ Locating / Spawning vehicle...")
-                    local spawnPos = CFrame.new(0, 130, -1537)
-                    if char and char:FindFirstChild("HumanoidRootPart") then
-                        char.HumanoidRootPart.CFrame = spawnPos
-                        char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
-                    end
-                    task.wait(0.2)
-                    for _, v in ipairs(Workspace:GetDescendants()) do
-                        if v:IsA("VehicleSeat") and (v.Position - spawnPos.Position).Magnitude < 100 then
-                            if v.Occupant == nil then
-                                v:Sit(hum)
-                                logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                                task.wait(0.2)
-                                break
-                            end
-                        end
-                    end
-                else
-                    -- We have a car, let's do a run
-                    local rs = game:GetService("ReplicatedStorage")
-                    logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                    logFormat("🚀 Client launch: Auto1 Forward: 70 Up: 38")
-                    logFormat("🍀 Luck UI start")
-                    pcall(function() rs:FindFirstChild("ClientCarLaunch", true):FireServer() end)
-                    
-                    local pts = {
-                        Vector3.new(-1, 122, -1513),
-                        Vector3.new(-1, 115, -1498),
-                        Vector3.new(-1, 63, -1379),
-                        Vector3.new(-4, 76, -1296),
-                        Vector3.new(3, 44, 742),
-                        Vector3.new(10, 12, 2781)
-                    }
-                    if isUseCustomPath() and #customPathPoints > 0 then
-                        pts = customPathPoints
-                    end
-                    
-                    local function slideTo(targetPos, duration)
-                        local startPos = car.PrimaryPart and car.PrimaryPart.Position or seat.Position
-                        local t = 0
-                        local realVel = (targetPos - startPos) / duration
-                        
-                        local bv = Instance.new("BodyVelocity")
-                        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-                        bv.Velocity = realVel
-                        bv.Parent = seat
-                        
-                        while t < duration and isAutoFarmEnabled() do
-                            local dt = RunService.Heartbeat:Wait()
-                            t = t + dt
-                            local alpha = math.clamp(t / duration, 0, 1)
-                            local currPos = startPos:Lerp(targetPos, alpha)
-                            
-                            local lookAt = Vector3.new(targetPos.X, currPos.Y, targetPos.Z)
-                            local newCF
-                            if (lookAt - currPos).Magnitude > 0.1 then
-                                newCF = CFrame.new(currPos, lookAt)
-                            else
-                                newCF = CFrame.new(currPos) * (car.PrimaryPart and car.PrimaryPart.CFrame.Rotation or seat.CFrame.Rotation)
-                            end
-                            
-                            car:PivotTo(newCF)
-                            
-                            for _, p in ipairs(car:GetDescendants()) do
-                                if p:IsA("BasePart") then
-                                    p.CanCollide = false
-                                    p.AssemblyLinearVelocity = realVel
-                                    p.AssemblyAngularVelocity = Vector3.new(0,0,0)
-                                end
-                            end
-                            if char then
-                                for _, p in ipairs(char:GetDescendants()) do
-                                    if p:IsA("BasePart") then 
-                                        p.CanCollide = false
-                                        p.AssemblyLinearVelocity = realVel
-                                    end
-                                end
-                            end
-                        end
-                        if bv then bv:Destroy() end
-                    end
-                    
-                    if isUseCustomPath() and #customPathPoints > 0 then
-                        logFormat("[AeroBalloon] Executing Custom Path")
-                        for i = 1, #pts do
-                            if not isAutoFarmEnabled() then break end
-                            local dist = (i == 1) and 50 or (pts[i] - pts[i-1]).Magnitude
-                            local dur = math.clamp(dist / 300, 0.1, 1.5)
-                            slideTo(pts[i], dur)
-                        end
-                    else
-                        -- Trace the exact floor path to avoid the anti-cheat high-fly kill brick
-                        if isAutoFarmEnabled() then
-                            logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                            slideTo(pts[1], 0.2)
-                        end
-                        if isAutoFarmEnabled() then slideTo(pts[2], 0.2) end
-                        if isAutoFarmEnabled() then slideTo(pts[3], 0.2) end
-                        if isAutoFarmEnabled() then slideTo(pts[4], 0.2) end
-                        
-                        -- From the end of the ramp, fly to the multipliers
-                        if isAutoFarmEnabled() then
-                            logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                            slideTo(pts[5], 0.8)
-                        end
-                        if isAutoFarmEnabled() then
-                            slideTo(pts[6], 1.2)
-                        end
-                    end
-                    
-                    for _, p in ipairs(car:GetDescendants()) do
-                        if p:IsA("BasePart") then p.CanCollide = true end
-                    end
-                    
-                    logFormat("🏁 Checkpoint UI: 68 x500000 Label: x500.000 🍀")
-                    logFormat("🍀 Luck UI end")
-                    logFormat("📷 Reveal camera active - OPEN button shown - base x500000")
-                    logFormat("LastZone: false")
-                    
-                    -- Trigger events and UI buttons at the end
-                    local clickAttempts = 0
-                    while clickAttempts < 3 and isAutoFarmEnabled() do
-                        clickAttempts = clickAttempts + 1
-                        task.wait(0.2)
-                        
-                        local remotes = {
-                            "OpenBoxClick", "ManageSlimeOpen", "SlimeReveal", "EndBoxReveal", "RetryRun", "StartBoxReveal", "BoxStarsReveal"
-                        }
-                        for _, rName in ipairs(remotes) do
-                            local r = rs:FindFirstChild(rName, true)
-                            if r and r:IsA("RemoteEvent") then
-                                pcall(function() r:FireServer() end)
-                            end
-                        end
-                        
-                        for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                            if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                                if obj.Visible then
-                                    local txt = (obj:IsA("TextLabel") and obj.Text or ""):lower()
-                                    if obj:IsA("TextButton") then txt = obj.Text:lower() end
-                                    local name = obj.Name:lower()
-                                    
-                                    if txt:find("open") or txt:find("claim") or txt:find("skip") or txt:find("play") or txt:find("retry") or txt:find("открыть") or txt:find("забрать") or name:find("open") or name:find("claim") or name:find("retry") or name == "openboxbutton" or name == "textbutton" then
-                                        if getconnections then
-                                            for _, conn in ipairs(getconnections(obj.MouseButton1Click)) do conn:Fire() end
-                                            for _, conn in ipairs(getconnections(obj.Activated)) do conn:Fire() end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end
-end)
-
--- MOVEMENT & SPEED
-createLabel(_t("Speed"), MainTab)
-local isCustomSpeed = createToggle(_t("CustomSpeed"), MainTab)
-local getSpeed = createSlider(_t("SpeedSlider"), 16, 1000, 100, MainTab)
-local isFlyEnabled = createToggle(_t("Fly"), MainTab)
-
-createLabel(_t("CarMods") or "CAR MODS", MainTab)
-local isNoClipEnabled = createToggle(_t("NoClip") or "No-Clip", MainTab)
-local isAutoFlipEnabled = createToggle(_t("AutoFlip") or "Auto-Flip", MainTab)
-local isInfJumpEnabled = createToggle(_t("InfJump") or "Inf Jump", MainTab)
 
 
 
-connectSignal(RunService.Stepped, function()
-    if isNoClipEnabled() then
-        local root, rType, vModel = getCharRoot(false)
-        if vModel then
-            for _, p in ipairs(vModel:GetDescendants()) do
-                if p:IsA("BasePart") and p.CanCollide then
-                    p.CanCollide = false
-                end
-            end
-        end
-        local char = LocalPlayer.Character
-        if char then
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") and p.CanCollide then
-                    p.CanCollide = false
-                end
-            end
-        end
-    end
-    
-    if isAutoFlipEnabled() then
-        local root, rType, vModel = getCharRoot(false)
-        if rType == "Vehicle" and vModel and vModel.PrimaryPart then
-            local rx, ry, rz = vModel.PrimaryPart.CFrame:ToOrientation()
-            if math.abs(math.deg(rx)) > 80 or math.abs(math.deg(rz)) > 80 then
-                vModel:PivotTo(CFrame.new(vModel.PrimaryPart.Position) * CFrame.Angles(0, ry, 0) + Vector3.new(0, 3, 0))
-            end
-        end
-    end
-end)
 
-connectSignal(UserInputService.JumpRequest, function()
-    if isInfJumpEnabled() then
-        local root, rType, vModel = getCharRoot(false)
-        if rType == "Vehicle" and vModel and vModel.PrimaryPart then
-            vModel.PrimaryPart.AssemblyLinearVelocity = Vector3.new(
-                vModel.PrimaryPart.AssemblyLinearVelocity.X,
-                50,
-                vModel.PrimaryPart.AssemblyLinearVelocity.Z
-            )
-        else
-            local char = LocalPlayer.Character
-            if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end
-end)
+
+
+
 
 local wasWalkSpeedChanged = false
 connectSignal(RunService.Heartbeat, function()
@@ -1580,79 +1139,9 @@ connectSignal(Players.PlayerRemoving, function(player)
 end)
 
 -- GRAPHICS & CPU OPTIMIZATION
-createLabel("GRAPHICS & CPU SAVER", VisualsTab)
-local isCpuSaverEnabled = createToggle(_t("CpuSaver") or "CPU / GPU Saver (3D Off)", VisualsTab)
-createLabel("Graphics Quality (1=Min, 21=Auto)", VisualsTab)
-local getGraphicsLevel = createSlider("Quality Level", 1, 21, 21, VisualsTab)
 
--- Black Overlay Frame for CPU Saver
-local CpuSaverOverlay = Instance.new("Frame")
-CpuSaverOverlay.Name = "CpuSaverOverlay"
-CpuSaverOverlay.Size = UDim2.new(1, 0, 1, 0)
-CpuSaverOverlay.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
-CpuSaverOverlay.Visible = false
-CpuSaverOverlay.ZIndex = 999
-CpuSaverOverlay.Parent = ScreenGui
 
-local CpuSaverLabel = Instance.new("TextLabel")
-CpuSaverLabel.Size = UDim2.new(1, 0, 0, 80)
-CpuSaverLabel.Position = UDim2.new(0, 0, 0.5, -40)
-CpuSaverLabel.BackgroundTransparency = 1
-CpuSaverLabel.Text = "⚡ CPU / GPU SAVER ACTIVE\n3D Rendering Disabled | Maximum Performance & Anti-Kick"
-CpuSaverLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
-CpuSaverLabel.Font = Enum.Font.GothamBold
-CpuSaverLabel.TextSize = 18
-CpuSaverLabel.Parent = CpuSaverOverlay
 
-local was3dDisabled = false
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(0.5)
-        local cpuActive = isCpuSaverEnabled()
-        CpuSaverOverlay.Visible = cpuActive
-        
-        if cpuActive then
-            if not was3dDisabled then
-                was3dDisabled = true
-                pcall(function()
-                    RunService:Set3dRenderingEnabled(false)
-                end)
-                pcall(function()
-                    if setfpscap then setfpscap(15) end
-                end)
-            end
-        else
-            if was3dDisabled then
-                was3dDisabled = false
-                pcall(function()
-                    RunService:Set3dRenderingEnabled(true)
-                end)
-                pcall(function()
-                    if setfpscap then setfpscap(0) end
-                end)
-            end
-        end
-    end
-end)
-
--- Graphics Quality Loop
-local currentQuality = 21
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(1)
-        local desired = getGraphicsLevel()
-        if desired ~= currentQuality then
-            currentQuality = desired
-            pcall(function()
-                if desired == 21 then
-                    settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
-                else
-                    settings().Rendering.QualityLevel = desired
-                end
-            end)
-        end
-    end
-end)
 
 -- OTHER & MULTI-LAYER ANTI-AFK
 
@@ -1708,6 +1197,173 @@ connectSignal(UserInputService.InputBegan, function(input, gpe)
     if not gpe and input.KeyCode == currentToggleKey then
         isMenuVisible = not isMenuVisible
         MainFrame.Visible = isMenuVisible
+    end
+end)
+
+createLabel("MACRO PATH", MainTab)
+
+local macroActionFrame = Instance.new("Frame")
+macroActionFrame.Size = UDim2.new(1, 0, 0, 40)
+macroActionFrame.BackgroundTransparency = 1
+macroActionFrame.Parent = MainTab
+
+local btnRecordPath = Instance.new("TextButton")
+btnRecordPath.Size = UDim2.new(0.33, -5, 1, 0)
+btnRecordPath.Position = UDim2.new(0, 0, 0, 0)
+btnRecordPath.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+btnRecordPath.Text = "Record (Rec)"
+btnRecordPath.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnRecordPath.Font = Enum.Font.GothamBold
+btnRecordPath.TextSize = 12
+btnRecordPath.Parent = macroActionFrame
+Instance.new("UICorner", btnRecordPath).CornerRadius = UDim.new(0, 6)
+
+local btnPlayPath = Instance.new("TextButton")
+btnPlayPath.Size = UDim2.new(0.34, -5, 1, 0)
+btnPlayPath.Position = UDim2.new(0.33, 2, 0, 0)
+btnPlayPath.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+btnPlayPath.Text = "Play Macro"
+btnPlayPath.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnPlayPath.Font = Enum.Font.GothamBold
+btnPlayPath.TextSize = 12
+btnPlayPath.Parent = macroActionFrame
+Instance.new("UICorner", btnPlayPath).CornerRadius = UDim.new(0, 6)
+
+local btnClearPath = Instance.new("TextButton")
+btnClearPath.Size = UDim2.new(0.33, 0, 1, 0)
+btnClearPath.Position = UDim2.new(0.67, 5, 0, 0)
+btnClearPath.BackgroundColor3 = Color3.fromRGB(50, 50, 150)
+btnClearPath.Text = "Clear"
+btnClearPath.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnClearPath.Font = Enum.Font.GothamBold
+btnClearPath.TextSize = 12
+btnClearPath.Parent = macroActionFrame
+Instance.new("UICorner", btnClearPath).CornerRadius = UDim.new(0, 6)
+
+local getBaseSpeed = createSlider("Base Speed (10 = 1.0x)", 1, 100, 10, MainTab)
+local getAltSpeed = createSlider("Alt Speed (10 = 1.0x)", 1, 100, 10, MainTab)
+local getAltSpeedNode = createSlider("Apply Alt Speed From Node", 1, 100, 1, MainTab)
+
+local customPathPoints = {}
+local isRecordingPath = false
+local isPlayingPath = false
+local pathNodes = {}
+
+local function clearVisualPath()
+    for _, node in ipairs(pathNodes) do
+        if node and node.Parent then node:Destroy() end
+    end
+    table.clear(pathNodes)
+    table.clear(customPathPoints)
+end
+
+connectSignal(btnClearPath.MouseButton1Click, function()
+    clearVisualPath()
+end)
+
+connectSignal(btnRecordPath.MouseButton1Click, function()
+    if isPlayingPath then return end
+    isRecordingPath = not isRecordingPath
+    if isRecordingPath then
+        btnRecordPath.Text = "Stop Rec"
+        btnRecordPath.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    else
+        btnRecordPath.Text = "Record (Rec)"
+        btnRecordPath.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    end
+end)
+
+connectSignal(btnPlayPath.MouseButton1Click, function()
+    if isRecordingPath or #customPathPoints == 0 then return end
+    isPlayingPath = not isPlayingPath
+    if isPlayingPath then
+        btnPlayPath.Text = "Stop Macro"
+        btnPlayPath.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    else
+        btnPlayPath.Text = "Play Macro"
+        btnPlayPath.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    end
+end)
+
+task.spawn(function()
+    while ScreenGui and ScreenGui.Parent do
+        task.wait(0.2)
+        if isRecordingPath then
+            local root = getCharRoot(false)
+            if root then
+                local pos = root.Position
+                if #customPathPoints == 0 or (customPathPoints[#customPathPoints] - pos).Magnitude > 30 then
+                    table.insert(customPathPoints, pos)
+                    local part = Instance.new("Part")
+                    part.Size = Vector3.new(3, 3, 3)
+                    part.Position = pos
+                    part.Anchored = true
+                    part.CanCollide = false
+                    part.Material = Enum.Material.Neon
+                    part.Color = Color3.fromRGB(0, 255, 150)
+                    part.Transparency = 0.5
+                    part.Parent = Workspace
+                    table.insert(pathNodes, part)
+                    
+                    -- Create text label to show node number
+                    local bg = Instance.new("BillboardGui")
+                    bg.Size = UDim2.new(0, 50, 0, 50)
+                    bg.StudsOffset = Vector3.new(0, 3, 0)
+                    bg.Parent = part
+                    local tl = Instance.new("TextLabel")
+                    tl.Size = UDim2.new(1, 0, 1, 0)
+                    tl.BackgroundTransparency = 1
+                    tl.Text = tostring(#customPathPoints)
+                    tl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    tl.TextScaled = true
+                    tl.Parent = bg
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while ScreenGui and ScreenGui.Parent do
+        task.wait(0.5)
+        if isPlayingPath and #customPathPoints > 0 then
+            logFormat("[Macro] Starting Macro Execution")
+            
+            -- Prepare Car
+            local car = getCar()
+            if not car then
+                local spawnEvent = game:GetService("ReplicatedStorage"):FindFirstChild("SpawnCarEvent", true)
+                if spawnEvent then spawnEvent:FireServer() end
+                task.wait(1.5)
+                car = getCar()
+            end
+            
+            if car then
+                -- Follow Path
+                for i = 1, #customPathPoints do
+                    if not isPlayingPath then break end
+                    
+                    local pts = customPathPoints
+                    local dist = (i == 1) and 50 or (pts[i] - pts[i-1]).Magnitude
+                    
+                    local speedMult = (i >= getAltSpeedNode()) and (getAltSpeed() / 10) or (getBaseSpeed() / 10)
+                    if speedMult <= 0.01 then speedMult = 0.01 end
+                    
+                    local dur = math.clamp(dist / (200 * speedMult), 0.1, 2.0)
+                    
+                    slideTo(pts[i], dur)
+                end
+                
+                -- Done
+                isPlayingPath = false
+                btnPlayPath.Text = "Play Macro"
+                btnPlayPath.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+            else
+                isPlayingPath = false
+                btnPlayPath.Text = "Play Macro"
+                btnPlayPath.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+            end
+        end
     end
 end)
 
@@ -1930,12 +1586,12 @@ connectSignal(btnScan.MouseButton1Click, function()
 end)
 
 
-createLabel("Server Players (Teleport)", PlayersTab)
+createLabel("Server Players (Teleport)", TeleportsTab)
 
 local PlayerListContainer = Instance.new("Frame")
 PlayerListContainer.Size = UDim2.new(1, 0, 0, 250)
 PlayerListContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-PlayerListContainer.Parent = PlayersTab
+PlayerListContainer.Parent = TeleportsTab
 Instance.new("UICorner", PlayerListContainer).CornerRadius = UDim.new(0, 6)
 
 local PlayerScroll = Instance.new("ScrollingFrame")
@@ -2014,7 +1670,7 @@ RefreshBtn.Text = "Refresh Player List"
 RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 RefreshBtn.Font = Enum.Font.GothamBold
 RefreshBtn.TextSize = 14
-RefreshBtn.Parent = PlayersTab
+RefreshBtn.Parent = TeleportsTab
 Instance.new("UICorner", RefreshBtn).CornerRadius = UDim.new(0, 6)
 connectSignal(RefreshBtn.MouseButton1Click, refreshPlayerList)
 
@@ -2069,10 +1725,7 @@ createTeleportBtn(_t("TpCarShop") or "Car Shop", TeleportsTab, function()
     pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("OpenCarShop", true):FireServer() end)
     teleportToLocation("carshop")
 end)
-createTeleportBtn(_t("TpPaintShop") or "Paint Shop", TeleportsTab, function()
-    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("PaintShopEvent", true):FireServer() end)
-    teleportToLocation("paintshop")
-end)
+
 createTeleportBtn(_t("TpEventShop") or "Event Shop", TeleportsTab, function()
     pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("OpenEventShop", true):FireServer() end)
     teleportToLocation("eventshop")
