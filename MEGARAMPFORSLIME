@@ -1,6 +1,19 @@
 -- MEGA RAMP FOR SLIME SCRIPT
 -- UI & Logix rewrite for better design and functionality.
 
+if _G.MegaRampConnections then
+    for _, conn in ipairs(_G.MegaRampConnections) do
+        pcall(function() if conn and conn.Connected then conn:Disconnect() end end)
+    end
+end
+_G.MegaRampConnections = {}
+
+local function connectSignal(signal, callback)
+    local conn = connectSignal(signal, callback)
+    table.insert(_G.MegaRampConnections, conn)
+    return conn
+end
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -67,7 +80,13 @@ local T = {
         TpMiniParkour = "Мини-Паркур",
         TpEventShop = "Магазин Событий",
         CpuSaver = "Энергосбережение (3D Выкл / CPU Saver)",
-        LowGraphics = "Ультра-Низкая Графика (ФПС Буст)"
+        LowGraphics = "Ультра-Низкая Графика (ФПС Буст)",
+        CustomPathing = "КАСТОМНЫЙ МАРШРУТ",
+        RecordPath = "Записать маршрут (Rec)",
+        ClearPath = "Очистить маршрут",
+        UseCustomPath = "Использовать кастомный маршрут",
+        PanicSettings = "ГОРЯЧАЯ КЛАВИША МЕНЮ",
+        PanicBind = "Клавиша скрытия меню"
     },
     EN = {
         Title = "MEGA RAMP FOR SLIME",
@@ -111,7 +130,13 @@ local T = {
         TpMiniParkour = "Mini Parkour",
         TpEventShop = "Event Shop",
         CpuSaver = "CPU / GPU Saver (3D Off)",
-        LowGraphics = "Ultra Low Graphics (FPS Boost)"
+        LowGraphics = "Ultra Low Graphics (FPS Boost)",
+        CustomPathing = "CUSTOM PATHING",
+        RecordPath = "Record Path (Rec)",
+        ClearPath = "Clear Path",
+        UseCustomPath = "Use Custom Path",
+        PanicSettings = "MENU TOGGLE HOTKEY",
+        PanicBind = "Menu Toggle Key"
     },
     ZH = {
         Title = "MEGA RAMP FOR SLIME",
@@ -155,7 +180,13 @@ local T = {
         TpMiniParkour = "迷你跑酷",
         TpEventShop = "活动商店",
         CpuSaver = "CPU 节能模式 (禁用3D渲染)",
-        LowGraphics = "超低画质 (帧率提升)"
+        LowGraphics = "超低画质 (帧率提升)",
+        CustomPathing = "自定义路线",
+        RecordPath = "记录路线 (Rec)",
+        ClearPath = "清除路线",
+        UseCustomPath = "使用自定义路线",
+        PanicSettings = "菜单切换热键",
+        PanicBind = "菜单切换键"
     }
 }
 local curLang = "RU"
@@ -203,7 +234,7 @@ for _, l in ipairs(langs) do
     b.Parent = LangFrame
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
     
-    b.MouseButton1Click:Connect(function()
+    connectSignal(b.MouseButton1Click, function()
         curLang = l.code
         langEvent:Fire()
     end)
@@ -406,7 +437,7 @@ FpsLabel.Parent = Topbar
 
 local lastTick = tick()
 local frames = 0
-RunService.RenderStepped:Connect(function()
+connectSignal(RunService.RenderStepped, function()
     frames = frames + 1
     local t = tick()
     if t - lastTick >= 1 then
@@ -443,22 +474,22 @@ Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
 -- Dragging Logic
 local dragging, dragInput, dragStart, startPos
-Topbar.InputBegan:Connect(function(input)
+connectSignal(Topbar.InputBegan, function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
         startPos = MainFrame.Position
-        input.Changed:Connect(function()
+        connectSignal(input.Changed, function()
             if input.UserInputState == Enum.UserInputState.End then dragging = false end
         end)
     end
 end)
-Topbar.InputChanged:Connect(function(input)
+connectSignal(Topbar.InputChanged, function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
-UserInputService.InputChanged:Connect(function(input)
+connectSignal(UserInputService.InputChanged, function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
@@ -466,7 +497,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 local isMinimized = false
-MinimizeBtn.MouseButton1Click:Connect(function()
+connectSignal(MinimizeBtn.MouseButton1Click, function()
     isMinimized = not isMinimized
     MainFrame.Size = isMinimized and UDim2.new(0, 500, 0, 40) or UDim2.new(0, 500, 0, 480)
 end)
@@ -530,7 +561,7 @@ local function createTab(name)
     ContentLayout.Padding = UDim.new(0, 10)
     ContentLayout.Parent = TabContent
 
-    TabBtn.MouseButton1Click:Connect(function()
+    connectSignal(TabBtn.MouseButton1Click, function()
         for _, child in ipairs(Container:GetChildren()) do
             if child:IsA("Frame") and child ~= TabContent then
                 child.Visible = false
@@ -615,15 +646,40 @@ NoBtn.ZIndex = 11
 NoBtn.Parent = ConfirmBox
 Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 6)
 
-CloseBtn.MouseButton1Click:Connect(function()
+local function CleanupScript()
+    if _G.MegaRampConnections then
+        for _, conn in ipairs(_G.MegaRampConnections) do
+            pcall(function() if conn and conn.Connected then conn:Disconnect() end end)
+        end
+        _G.MegaRampConnections = {}
+    end
+    pcall(function() RunService:Set3dRenderingEnabled(true) end)
+    pcall(function() if setfpscap then setfpscap(0) end end)
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+        Workspace.Lighting.GlobalShadows = true
+    end)
+    pcall(function()
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = 16
+            if char.Humanoid.SeatPart and char.Humanoid.SeatPart:IsA("VehicleSeat") then
+                char.Humanoid.SeatPart.MaxSpeed = 50
+            end
+        end
+    end)
+    if ScreenGui then ScreenGui:Destroy() end
+end
+
+connectSignal(CloseBtn.MouseButton1Click, function()
     if isMinimized then
-        ScreenGui:Destroy()
+        CleanupScript()
     else
         ConfirmFrame.Visible = true
     end
 end)
-NoBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = false end)
-YesBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+connectSignal(NoBtn.MouseButton1Click, function() ConfirmFrame.Visible = false end)
+connectSignal(YesBtn.MouseButton1Click, function() CleanupScript() end)
 
 -- UI Helpers
 local function createLabel(text, parent)
@@ -647,17 +703,17 @@ local function createToggle(text, parent)
     Frame.Parent = parent or Container
     Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
 
-    Frame.MouseEnter:Connect(function()
+    connectSignal(Frame.MouseEnter, function()
         TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
     end)
-    Frame.MouseLeave:Connect(function()
+    connectSignal(Frame.MouseLeave, function()
         TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
     end)
 
-    Frame.MouseEnter:Connect(function()
+    connectSignal(Frame.MouseEnter, function()
         TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
     end)
-    Frame.MouseLeave:Connect(function()
+    connectSignal(Frame.MouseLeave, function()
         TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
     end)
 
@@ -687,7 +743,7 @@ local function createToggle(text, parent)
     Circle.Parent = Button
     Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
 
-    Button.MouseButton1Click:Connect(function()
+    connectSignal(Button.MouseButton1Click, function()
         toggleState = not toggleState
         if toggleState then
             Button.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
@@ -697,7 +753,7 @@ local function createToggle(text, parent)
             Circle:TweenPosition(UDim2.new(0, 2, 0.5, -8), "Out", "Quad", 0.2, true)
         end
     end)
-    return function() return toggleState end
+    return function() return toggleState and ScreenGui and ScreenGui.Parent ~= nil end
 end
 
 local function createSlider(text, min, max, default, parent)
@@ -740,17 +796,17 @@ local function createSlider(text, min, max, default, parent)
     SliderBtn.Parent = SliderBG
 
     local draggingSlider = false
-    SliderBtn.InputBegan:Connect(function(input)
+    connectSignal(SliderBtn.InputBegan, function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             draggingSlider = true
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
+    connectSignal(UserInputService.InputEnded, function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             draggingSlider = false
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
+    connectSignal(UserInputService.InputChanged, function(input)
         if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local relativeX = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
             value = math.floor(min + ((max - min) * relativeX))
@@ -818,7 +874,7 @@ CopyCoordsBtn.TextSize = 18
 CopyCoordsBtn.Parent = ProfileFrame
 Instance.new("UICorner", CopyCoordsBtn).CornerRadius = UDim.new(0, 6)
 
-RunService.RenderStepped:Connect(function()
+connectSignal(RunService.RenderStepped, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local pos = char.HumanoidRootPart.Position
@@ -828,7 +884,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-CopyCoordsBtn.MouseButton1Click:Connect(function()
+connectSignal(CopyCoordsBtn.MouseButton1Click, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local pos = char.HumanoidRootPart.Position
@@ -847,6 +903,93 @@ local isAutoFarmEnabled = createToggle(_t("EnableAutoFarm"), MainTab)
 local AutoFarmInfo = createLabel(_t("AFInfo"), MainTab)
 AutoFarmInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
 AutoFarmInfo.TextSize = 12
+createLabel(_t("CustomPathing") or "CUSTOM PATHING", MainTab)
+local isUseCustomPath = createToggle(_t("UseCustomPath") or "Use Custom Path", MainTab)
+
+local pathActionFrame = Instance.new("Frame")
+pathActionFrame.Size = UDim2.new(1, 0, 0, 40)
+pathActionFrame.BackgroundTransparency = 1
+pathActionFrame.Parent = MainTab
+
+local btnRecordPath = Instance.new("TextButton")
+btnRecordPath.Size = UDim2.new(0.5, -5, 1, 0)
+btnRecordPath.Position = UDim2.new(0, 0, 0, 0)
+btnRecordPath.BackgroundColor3 = Color3.fromRGB(50, 50, 150)
+btnRecordPath.Text = _t("RecordPath") or "Record Path (Rec)"
+btnRecordPath.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnRecordPath.Font = Enum.Font.GothamBold
+btnRecordPath.TextSize = 12
+btnRecordPath.Parent = pathActionFrame
+Instance.new("UICorner", btnRecordPath).CornerRadius = UDim.new(0, 6)
+
+local btnClearPath = Instance.new("TextButton")
+btnClearPath.Size = UDim2.new(0.5, -5, 1, 0)
+btnClearPath.Position = UDim2.new(0.5, 5, 0, 0)
+btnClearPath.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+btnClearPath.Text = _t("ClearPath") or "Clear Path"
+btnClearPath.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnClearPath.Font = Enum.Font.GothamBold
+btnClearPath.TextSize = 12
+btnClearPath.Parent = pathActionFrame
+Instance.new("UICorner", btnClearPath).CornerRadius = UDim.new(0, 6)
+
+local customPathPoints = {}
+local isRecordingPath = false
+local pathNodes = {}
+
+local function clearVisualPath()
+    for _, node in ipairs(pathNodes) do
+        if node and node.Parent then node:Destroy() end
+    end
+    table.clear(pathNodes)
+    table.clear(customPathPoints)
+end
+
+connectSignal(btnClearPath.MouseButton1Click, function()
+    clearVisualPath()
+    btnRecordPath.Text = _t("RecordPath") or "Record Path (Rec)"
+end)
+
+connectSignal(btnRecordPath.MouseButton1Click, function()
+    isRecordingPath = not isRecordingPath
+    if isRecordingPath then
+        btnRecordPath.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        btnRecordPath.Text = "Recording... (Stop)"
+    else
+        btnRecordPath.BackgroundColor3 = Color3.fromRGB(50, 50, 150)
+        btnRecordPath.Text = _t("RecordPath") or "Record Path (Rec)"
+    end
+end)
+
+task.spawn(function()
+    while ScreenGui and ScreenGui.Parent do
+        task.wait(0.5)
+        if isRecordingPath then
+            local char = LocalPlayer.Character
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local pos = root.Position
+                    if #customPathPoints == 0 or (customPathPoints[#customPathPoints] - pos).Magnitude > 20 then
+                        table.insert(customPathPoints, pos)
+                        -- Visual representation
+                        local part = Instance.new("Part")
+                        part.Size = Vector3.new(2, 2, 2)
+                        part.Position = pos
+                        part.Anchored = true
+                        part.CanCollide = false
+                        part.Material = Enum.Material.Neon
+                        part.Color = Color3.fromRGB(0, 255, 150)
+                        part.Transparency = 0.5
+                        part.Parent = Workspace
+                        table.insert(pathNodes, part)
+                    end
+                end
+            end
+        end
+    end
+end)
+
 
 
 -- PETS
@@ -1009,7 +1152,7 @@ local function safeMove(startPos, endPos, duration, forceVel)
     local calculatedVel = (endPos - startPos) / math.max(duration, 0.01)
     local moveVelocity = forceVel or calculatedVel
     
-    connection = RunService.Heartbeat:Connect(function()
+    connection = connectSignal(RunService.Heartbeat, function()
         if not isAutoFarmEnabled() then
             finished = true
             connection:Disconnect()
@@ -1126,6 +1269,9 @@ task.spawn(function()
                         Vector3.new(3, 44, 742),
                         Vector3.new(10, 12, 2781)
                     }
+                    if isUseCustomPath() and #customPathPoints > 0 then
+                        pts = customPathPoints
+                    end
                     
                     local function slideTo(targetPos, duration)
                         local startPos = car.PrimaryPart and car.PrimaryPart.Position or seat.Position
@@ -1172,23 +1318,32 @@ task.spawn(function()
                         if bv then bv:Destroy() end
                     end
                     
-                    -- Trace the exact floor path to avoid the anti-cheat high-fly kill brick
-                    if isAutoFarmEnabled() then
-                        logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                        slideTo(pts[1], 0.2)
-                    end
-                    if isAutoFarmEnabled() then slideTo(pts[2], 0.2) end
-                    if isAutoFarmEnabled() then slideTo(pts[3], 0.2) end
-                    if isAutoFarmEnabled() then slideTo(pts[4], 0.2) end
-                    
-                    -- From the end of the ramp, fly to the multipliers
-                    -- Increase duration so it doesn't skip touch events by moving too fast
-                    if isAutoFarmEnabled() then
-                        logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
-                        slideTo(pts[5], 0.8)
-                    end
-                    if isAutoFarmEnabled() then
-                        slideTo(pts[6], 1.2)
+                    if isUseCustomPath() and #customPathPoints > 0 then
+                        logFormat("[AeroBalloon] Executing Custom Path")
+                        for i = 1, #pts do
+                            if not isAutoFarmEnabled() then break end
+                            local dist = (i == 1) and 50 or (pts[i] - pts[i-1]).Magnitude
+                            local dur = math.clamp(dist / 300, 0.1, 1.5)
+                            slideTo(pts[i], dur)
+                        end
+                    else
+                        -- Trace the exact floor path to avoid the anti-cheat high-fly kill brick
+                        if isAutoFarmEnabled() then
+                            logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
+                            slideTo(pts[1], 0.2)
+                        end
+                        if isAutoFarmEnabled() then slideTo(pts[2], 0.2) end
+                        if isAutoFarmEnabled() then slideTo(pts[3], 0.2) end
+                        if isAutoFarmEnabled() then slideTo(pts[4], 0.2) end
+                        
+                        -- From the end of the ramp, fly to the multipliers
+                        if isAutoFarmEnabled() then
+                            logFormat("[AeroBalloon] ✅ Modalità pallone attiva dopo JumpCar")
+                            slideTo(pts[5], 0.8)
+                        end
+                        if isAutoFarmEnabled() then
+                            slideTo(pts[6], 1.2)
+                        end
                     end
                     
                     for _, p in ipairs(car:GetDescendants()) do
@@ -1252,7 +1407,7 @@ local isInfJumpEnabled = createToggle(_t("InfJump") or "Inf Jump", MainTab)
 
 
 
-RunService.Stepped:Connect(function()
+connectSignal(RunService.Stepped, function()
     if isNoClipEnabled() then
         local root, rType, vModel = getCharRoot(false)
         if vModel then
@@ -1283,7 +1438,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-UserInputService.JumpRequest:Connect(function()
+connectSignal(UserInputService.JumpRequest, function()
     if isInfJumpEnabled() then
         local root, rType, vModel = getCharRoot(false)
         if rType == "Vehicle" and vModel and vModel.PrimaryPart then
@@ -1302,7 +1457,7 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 local wasWalkSpeedChanged = false
-RunService.Heartbeat:Connect(function()
+connectSignal(RunService.Heartbeat, function()
     local char = LocalPlayer.Character
     if char then
         local humanoid = char:FindFirstChild("Humanoid")
@@ -1349,7 +1504,7 @@ local function stopFly()
     if flyBV then flyBV:Destroy(); flyBV = nil end
 end
 
-RunService.RenderStepped:Connect(function()
+connectSignal(RunService.RenderStepped, function()
     if isFlyEnabled() then
         local root = getCharRoot(true)
         if root then
@@ -1391,7 +1546,7 @@ local isESPEnabled = createToggle(_t("ESP"), VisualsTab)
 
 local espHighlights = {}
 
-RunService.RenderStepped:Connect(function()
+connectSignal(RunService.RenderStepped, function()
     if isESPEnabled() then
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
@@ -1417,7 +1572,7 @@ RunService.RenderStepped:Connect(function()
 
 end)
 
-Players.PlayerRemoving:Connect(function(player)
+connectSignal(Players.PlayerRemoving, function(player)
     if espHighlights[player] then
         espHighlights[player]:Destroy()
         espHighlights[player] = nil
@@ -1473,7 +1628,7 @@ task.spawn(function()
                     RunService:Set3dRenderingEnabled(true)
                 end)
                 pcall(function()
-                    if setfpscap then setfpscap(60) end
+                    if setfpscap then setfpscap(0) end
                 end)
             end
         end
@@ -1500,6 +1655,62 @@ task.spawn(function()
 end)
 
 -- OTHER & MULTI-LAYER ANTI-AFK
+
+createLabel(_t("PanicSettings") or "MENU TOGGLE HOTKEY", MainTab)
+
+local currentToggleKey = Enum.KeyCode.RightShift
+local isBindingKey = false
+
+local bindFrame = Instance.new("Frame")
+bindFrame.Size = UDim2.new(1, 0, 0, 40)
+bindFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+bindFrame.Parent = MainTab
+Instance.new("UICorner", bindFrame).CornerRadius = UDim.new(0, 6)
+
+local bindLabel = Instance.new("TextLabel")
+bindLabel.Size = UDim2.new(1, -120, 1, 0)
+bindLabel.Position = UDim2.new(0, 10, 0, 0)
+bindLabel.BackgroundTransparency = 1
+bindLabel.Text = _t("PanicBind") or "Menu Toggle Key"
+bindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+bindLabel.Font = Enum.Font.Gotham
+bindLabel.TextSize = 14
+bindLabel.TextXAlignment = Enum.TextXAlignment.Left
+bindLabel.Parent = bindFrame
+
+local bindButton = Instance.new("TextButton")
+bindButton.Size = UDim2.new(0, 100, 0, 26)
+bindButton.Position = UDim2.new(1, -110, 0.5, -13)
+bindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+bindButton.Text = currentToggleKey.Name
+bindButton.TextColor3 = Color3.fromRGB(0, 255, 150)
+bindButton.Font = Enum.Font.GothamBold
+bindButton.TextSize = 12
+bindButton.Parent = bindFrame
+Instance.new("UICorner", bindButton).CornerRadius = UDim.new(0, 4)
+
+connectSignal(bindButton.MouseButton1Click, function()
+    isBindingKey = true
+    bindButton.Text = "..."
+    bindButton.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+end)
+
+local isMenuVisible = true
+connectSignal(UserInputService.InputBegan, function(input, gpe)
+    if isBindingKey and input.UserInputType == Enum.UserInputType.Keyboard then
+        currentToggleKey = input.KeyCode
+        bindButton.Text = currentToggleKey.Name
+        bindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+        isBindingKey = false
+        return
+    end
+    
+    if not gpe and input.KeyCode == currentToggleKey then
+        isMenuVisible = not isMenuVisible
+        MainFrame.Visible = isMenuVisible
+    end
+end)
+
 createLabel(_t("Other"), MainTab)
 local isAntiAfkEnabled = createToggle(_t("AntiAfk"), MainTab)
 
@@ -1524,7 +1735,7 @@ pcall(function()
     end
 end)
 
-LocalPlayer.Idled:Connect(function()
+connectSignal(LocalPlayer.Idled, function()
     if isAntiAfkEnabled() then
         pcall(function()
             VirtualUser:CaptureController()
@@ -1612,7 +1823,7 @@ btnStopRecord.TextSize = 14
 btnStopRecord.Parent = GameInfoTab
 Instance.new("UICorner", btnStopRecord).CornerRadius = UDim.new(0, 6)
 
-UserInputService.InputBegan:Connect(function(input, gpe)
+connectSignal(UserInputService.InputBegan, function(input, gpe)
     if _G.ActionRecorder and _G.ActionRecorder.Recording then
         if input.UserInputType == Enum.UserInputType.Keyboard then
             table.insert(_G.ActionRecorder.Logs, string.format("[%s] KeyPressed: %s", os.date("%X"), tostring(input.KeyCode.Name)))
@@ -1622,7 +1833,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
-btnStartRecord.MouseButton1Click:Connect(function()
+connectSignal(btnStartRecord.MouseButton1Click, function()
     _G.ActionRecorder.Recording = true
     _G.ActionRecorder.Logs = {}
     table.insert(_G.ActionRecorder.Logs, "=== RECORDING STARTED ===")
@@ -1632,7 +1843,7 @@ btnStartRecord.MouseButton1Click:Connect(function()
     btnStartRecord.Text = "Recording..."
 end)
 
-btnStopRecord.MouseButton1Click:Connect(function()
+connectSignal(btnStopRecord.MouseButton1Click, function()
     if not _G.ActionRecorder.Recording then return end
     _G.ActionRecorder.Recording = false
     table.insert(_G.ActionRecorder.Logs, "=== RECORDING STOPPED ===")
@@ -1659,7 +1870,7 @@ btnStopRecord.MouseButton1Click:Connect(function()
     end
 end)
 
-btnScan.MouseButton1Click:Connect(function()
+connectSignal(btnScan.MouseButton1Click, function()
     local logData = "=== STARTING FULL GAME ANALYSIS ===\n"
     logData = logData .. "1. Workspace Vehicles:\n"
     local vehicles = 0
@@ -1784,7 +1995,7 @@ local function refreshPlayerList()
             tpBtn.Parent = pFrame
             Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
             
-            tpBtn.MouseButton1Click:Connect(function()
+            connectSignal(tpBtn.MouseButton1Click, function()
                 if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     teleportTo(p.Character.HumanoidRootPart.Position, true)
                 end
@@ -1805,10 +2016,10 @@ RefreshBtn.Font = Enum.Font.GothamBold
 RefreshBtn.TextSize = 14
 RefreshBtn.Parent = PlayersTab
 Instance.new("UICorner", RefreshBtn).CornerRadius = UDim.new(0, 6)
-RefreshBtn.MouseButton1Click:Connect(refreshPlayerList)
+connectSignal(RefreshBtn.MouseButton1Click, refreshPlayerList)
 
-Players.PlayerAdded:Connect(refreshPlayerList)
-Players.PlayerRemoving:Connect(refreshPlayerList)
+connectSignal(Players.PlayerAdded, refreshPlayerList)
+connectSignal(Players.PlayerRemoving, refreshPlayerList)
 refreshPlayerList()
 
 
@@ -1850,7 +2061,7 @@ local function createTeleportBtn(text, parent, callback)
     btn.Parent = f
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     
-    btn.MouseButton1Click:Connect(callback)
+    connectSignal(btn.MouseButton1Click, callback)
     return btn
 end
 
