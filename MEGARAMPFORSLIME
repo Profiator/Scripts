@@ -351,6 +351,7 @@ pcall(function()
     local oldNewIndex = mt.__newindex
     setreadonly(mt, false)
 
+    
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         if not checkcaller() then
@@ -363,22 +364,11 @@ pcall(function()
                 if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") or name:find("report") or name:find("crash") or name:find("error") or name:find("suspicious") or name:find("exploit") or name:find("admin") then
                     return nil
                 end
-            elseif method == "FindFirstChild" or method == "FindFirstChildOfClass" or method == "FindFirstChildWhichIsA" then
-                local args = {...}
-                if type(args[1]) == "string" then
-                    local n = tostring(args[1])
-                    if n == "BodyVelocity" or n == "BodyGyro" or n == "BodyForce" or n == "BodyPosition" or n == "RocketPropulsion" or n == "AlignPosition" or n == "AlignOrientation" then
-                        local lp = game:GetService("Players").LocalPlayer
-                        if lp and lp.Character and self:IsDescendantOf(lp.Character) then
-                            return nil
-                        end
-                    end
-                end
             end
         end
         
+        local args = {...}
         if _G.ActionRecorder and _G.ActionRecorder.Recording then
-            local args = {...}
             pcall(function()
                 if method == "FireServer" or method == "InvokeServer" then
                     local argStr = ""
@@ -398,36 +388,21 @@ pcall(function()
                     
                     local logMsg = string.format("[%s] %s: %s | Args: %s", os.date("%X"), method, selfName, argStr)
                     table.insert(_G.ActionRecorder.Logs, logMsg)
-                    print("[ActionRecorder]", logMsg)
                 end
             end)
+        end
+        
+        if _G.isRecordingMacro then
+            if method == "FireServer" or method == "InvokeServer" then
+                if not _G.CapturedRemotes then _G.CapturedRemotes = {} end
+                table.insert(_G.CapturedRemotes, {obj = self, args = args, method = method})
+            end
         end
 
         return oldNamecall(self, ...)
     end)
+    -- Removed __index and __newindex spoofing to prevent car physics bugs
 
-    mt.__index = newcclosure(function(self, key)
-        if not checkcaller() then
-            if key == "WalkSpeed" then return 16 end
-            if key == "JumpPower" then return 50 end
-            if key == "JumpHeight" then return 7.2 end
-            if key == "Transparency" and self:IsA("BasePart") then return 0 end
-            -- Removed Velocity spoofing to fix car physics bug
-            if key == "CFrame" and typeof(self) == "Instance" and self:IsA("HumanoidRootPart") then
-                -- Optional: Spoof CFrame if needed, but usually breaks the game. We leave it as is.
-            end
-        end
-        return oldIndex(self, key)
-    end)
-    
-    mt.__newindex = newcclosure(function(self, key, value)
-        if not checkcaller() then
-            if key == "WalkSpeed" or key == "JumpPower" or key == "JumpHeight" then return end
-        end
-        return oldNewIndex(self, key, value)
-    end)
-
-    setreadonly(mt, true)
     
     local ScriptContext = game:GetService("ScriptContext")
     local LogService = game:GetService("LogService")
@@ -1204,15 +1179,42 @@ btnClearPath.Parent = macroActionFrame
 Instance.new("UICorner", btnClearPath).CornerRadius = UDim.new(0, 6)
 
 local isLoopMacro = createToggle("Loop Macro (Infinite)", MainTab)
-local getPlaybackSpeed = createSlider("Playback Speed (10 = 1.0x)", 1, 100, 10, MainTab)
+local getPlaybackSpeed = createSlider("Base Playback Speed (10 = 1.0x)", 1, 100, 10, MainTab)
+
+createLabel("Speed Up Settings", MainTab)
+local isSpeedUpEnabled = createToggle("Enable Speed Up In Sequence", MainTab)
+local getSpeedUpTime = createSlider("Start Speed Up At (Secs)", 0, 600, 5, MainTab)
+local getSpeedUpMult = createSlider("Speed Up Multiplier (10 = 1.0x)", 1, 200, 50, MainTab)
 
 local macroRecords = {}
-local isRecordingMacro = false
 local isPlayingMacro = false
 local recordConnection = nil
+_G.isRecordingMacro = false
+_G.CapturedRemotes = {}
+_G.CapturedInputs = {}
+
+connectSignal(UserInputService.InputBegan, function(input, gpe)
+    if _G.isRecordingMacro then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            table.insert(_G.CapturedInputs, {type = "Keyboard", keyCode = input.KeyCode, state = true})
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+            table.insert(_G.CapturedInputs, {type = "Mouse", button = input.UserInputType, state = true, position = input.Position})
+        end
+    end
+end)
+
+connectSignal(UserInputService.InputEnded, function(input, gpe)
+    if _G.isRecordingMacro then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            table.insert(_G.CapturedInputs, {type = "Keyboard", keyCode = input.KeyCode, state = false})
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+            table.insert(_G.CapturedInputs, {type = "Mouse", button = input.UserInputType, state = false, position = input.Position})
+        end
+    end
+end)
 
 local function updateMacroButtons()
-    if isRecordingMacro then
+    if _G.isRecordingMacro then
         btnRecordPath.Text = "Stop Rec"
         btnRecordPath.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     else
@@ -1230,24 +1232,47 @@ local function updateMacroButtons()
 end
 
 connectSignal(btnClearPath.MouseButton1Click, function()
-    if isRecordingMacro or isPlayingMacro then return end
+    if _G.isRecordingMacro or isPlayingMacro then return end
     macroRecords = {}
 end)
 
 connectSignal(btnRecordPath.MouseButton1Click, function()
     if isPlayingMacro then return end
-    isRecordingMacro = not isRecordingMacro
+    _G.isRecordingMacro = not _G.isRecordingMacro
     
-    if isRecordingMacro then
+    if _G.isRecordingMacro then
         macroRecords = {}
+        _G.CapturedRemotes = {}
+        _G.CapturedInputs = {}
+        local timeElapsed = 0
         recordConnection = RunService.Heartbeat:Connect(function(dt)
             local root = getCharRoot(true)
+            local remotesToFire = _G.CapturedRemotes
+            local inputsToFire = _G.CapturedInputs
+            _G.CapturedRemotes = {}
+            _G.CapturedInputs = {}
+            
+            timeElapsed = timeElapsed + dt
+            
+            local char = LocalPlayer.Character
+            local inVehicle = false
+            if char then
+                local humanoid = char:FindFirstChild("Humanoid")
+                if humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
+                    inVehicle = true
+                end
+            end
+            
             if root then
                 table.insert(macroRecords, {
                     cframe = root.CFrame,
                     vel = root.AssemblyLinearVelocity,
                     rot = root.AssemblyAngularVelocity,
-                    dt = dt
+                    dt = dt,
+                    t = timeElapsed,
+                    remotes = remotesToFire,
+                    inputs = inputsToFire,
+                    inVehicle = inVehicle
                 })
             end
         end)
@@ -1266,7 +1291,6 @@ local function stopPlayback()
     local root = getCharRoot(true)
     if root then 
         root.Anchored = false 
-        -- Restore some velocity so it doesn't freeze in mid-air abruptly
         if #macroRecords > 0 then
             root.AssemblyLinearVelocity = macroRecords[#macroRecords].vel or Vector3.new(0,0,0)
         end
@@ -1274,45 +1298,99 @@ local function stopPlayback()
 end
 
 connectSignal(btnPlayPath.MouseButton1Click, function()
-    if isRecordingMacro or #macroRecords == 0 then return end
+    if _G.isRecordingMacro or #macroRecords == 0 then return end
     isPlayingMacro = not isPlayingMacro
     updateMacroButtons()
     
     if isPlayingMacro then
         task.spawn(function()
-            local modelToMove = nil
-            local root = getCharRoot(true)
-            
-            if not root then
-                pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("SpawnCarEvent", true):FireServer() end)
-                task.wait(1.5)
-                root = getCharRoot(true)
-            end
-            
-            if root then
-                modelToMove = root:FindFirstAncestorWhichIsA("Model")
-                root.Anchored = true
+            while isPlayingMacro do
+                local root = getCharRoot(true)
                 
-                while isPlayingMacro do
+                if root then
+                    root.Anchored = true
+                    
                     for i = 1, #macroRecords do
                         if not isPlayingMacro then break end
                         local rec = macroRecords[i]
                         
-                        if modelToMove and modelToMove.PrimaryPart then
-                            modelToMove:PivotTo(rec.cframe)
-                        else
-                            root.CFrame = rec.cframe
+                        if rec.inputs and #rec.inputs > 0 then
+                            for _, inp in ipairs(rec.inputs) do
+                                pcall(function()
+                                    if VirtualInputManager then
+                                        if inp.type == "Keyboard" then
+                                            VirtualInputManager:SendKeyEvent(inp.state, inp.keyCode, false, game)
+                                        elseif inp.type == "Mouse" then
+                                            local btn = (inp.button == Enum.UserInputType.MouseButton1) and 0 or 1
+                                            VirtualInputManager:SendMouseButtonEvent(inp.position.X, inp.position.Y, btn, inp.state, game, 0)
+                                        end
+                                    end
+                                end)
+                            end
                         end
                         
-                        root.AssemblyLinearVelocity = rec.vel or Vector3.new(0,0,0)
+                        if rec.remotes and #rec.remotes > 0 then
+                            for _, rm in ipairs(rec.remotes) do
+                                pcall(function()
+                                    if rm.obj and rm.method == "FireServer" then
+                                        rm.obj:FireServer(unpack(rm.args))
+                                    elseif rm.obj and rm.method == "InvokeServer" then
+                                        task.spawn(function() rm.obj:InvokeServer(unpack(rm.args)) end)
+                                    end
+                                end)
+                            end
+                        end
+                        
+                        local char = LocalPlayer.Character
+                        local currentlyInVehicle = false
+                        local humanoid = nil
+                        if char then
+                            humanoid = char:FindFirstChild("Humanoid")
+                            if humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
+                                currentlyInVehicle = true
+                            end
+                        end
+                        
+                        if rec.inVehicle and not currentlyInVehicle and humanoid then
+                            local nearestSeat = nil
+                            local nearestDist = 30
+                            for _, v in ipairs(Workspace:GetDescendants()) do
+                                if v:IsA("VehicleSeat") then
+                                    local dist = (v.Position - rec.cframe.p).Magnitude
+                                    if dist < nearestDist then
+                                        nearestDist = dist
+                                        nearestSeat = v
+                                    end
+                                end
+                            end
+                            if nearestSeat then
+                                pcall(function() nearestSeat:Sit(humanoid) end)
+                            end
+                        end
+                        
+                        root = getCharRoot(true)
+                        if root then
+                            local modelToMove = root:FindFirstAncestorWhichIsA("Model")
+                            if modelToMove and modelToMove.PrimaryPart then
+                                modelToMove:PivotTo(rec.cframe)
+                            else
+                                root.CFrame = rec.cframe
+                            end
+                            root.AssemblyLinearVelocity = rec.vel or Vector3.new(0,0,0)
+                        end
                         
                         local speedMult = getPlaybackSpeed() / 10
+                        if isSpeedUpEnabled() and rec.t >= getSpeedUpTime() then
+                            speedMult = getSpeedUpMult() / 10
+                        end
+                        
                         if speedMult < 0.1 then speedMult = 0.1 end
                         
                         task.wait(rec.dt / speedMult)
                     end
-                    if not isLoopMacro() then break end
                 end
+                
+                if not isLoopMacro() then break end
             end
             stopPlayback()
         end)
