@@ -194,6 +194,17 @@ local function slideTo(targetPos, duration)
 end
 
 local function teleportTo(targetPos, keepVehicle)
+    local rs = game:GetService("ReplicatedStorage")
+    
+    -- Attempt 1: Try internal game remotes
+    pcall(function()
+        local tpEvent = rs:FindFirstChild("TeleportToCFrame", true)
+        if tpEvent and tpEvent:IsA("RemoteEvent") then
+            tpEvent:FireServer(CFrame.new(targetPos))
+        end
+    end)
+    
+    -- Attempt 2: Local TP with velocity reset
     local root = getCharRoot(keepVehicle)
     if not root then return end
     
@@ -1068,128 +1079,73 @@ end)
 
 
 
-local wasWalkSpeedChanged = false
-connectSignal(RunService.Heartbeat, function()
-    local char = LocalPlayer.Character
-    if char then
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            if isCustomSpeed() and not isFlyEnabled() then
-                humanoid.WalkSpeed = getSpeed()
-                wasWalkSpeedChanged = true
-                if humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
-                    humanoid.SeatPart.MaxSpeed = getSpeed()
-                end
-            elseif wasWalkSpeedChanged then
-                humanoid.WalkSpeed = 16
-                wasWalkSpeedChanged = false
-                if humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
-                    humanoid.SeatPart.MaxSpeed = 50
-                end
-            end
-        end
-    end
-end)
 
 local flying = false
-local flyBV, flyBG
-local function startFly(root)
-    if flying then return end
-    flying = true
-    
-    flyBG = Instance.new("BodyGyro")
-    flyBG.P = 9e5
-    flyBG.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-    flyBG.cframe = root.CFrame
-    flyBG.Parent = root
-    
-    flyBV = Instance.new("BodyVelocity")
-    flyBV.velocity = Vector3.new(0, 0, 0)
-    flyBV.maxForce = Vector3.new(9e9, 9e9, 9e9)
-    flyBV.Parent = root
-end
+local flySpeed = 50
 
-local function stopFly()
-    if not flying then return end
-    flying = false
-    if flyBG then flyBG:Destroy(); flyBG = nil end
-    if flyBV then flyBV:Destroy(); flyBV = nil end
-end
+connectSignal(RunService.RenderStepped, function(deltaTime)
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local humanoid = char:FindFirstChild("Humanoid")
+    local root = getCharRoot(true)
+    
+    if not humanoid or not root then return end
 
-connectSignal(RunService.RenderStepped, function()
+    -- Custom Speed (CFrame Based to avoid Anti-Cheat WalkSpeed checks)
+    if isCustomSpeed() and not isFlyEnabled() then
+        if humanoid.MoveDirection.Magnitude > 0 then
+            local speedDiff = getSpeed() - humanoid.WalkSpeed
+            if speedDiff > 0 then
+                local displacement = humanoid.MoveDirection * (speedDiff * deltaTime)
+                -- Apply displacement
+                if root:IsA("BasePart") then
+                    root.CFrame = root.CFrame + displacement
+                end
+            end
+        end
+    end
+
+    -- Fly (CFrame Based to avoid BodyMovers Anti-Cheat checks)
     if isFlyEnabled() then
-        local root = getCharRoot(true)
-        if root then
-            if not flying or (flyBG and flyBG.Parent ~= root) then
-                stopFly()
-                startFly(root)
+        if not flying then
+            flying = true
+            if root:IsA("BasePart") then
+                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             end
-            if flying and flyBG and flyBV then
-                local camera = Workspace.CurrentCamera
-                flyBG.cframe = CFrame.new(camera.CFrame.p, camera.CFrame.p + camera.CFrame.lookVector)
-                
-                local moveDir = Vector3.new(0,0,0)
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.lookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.lookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.rightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.rightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
-                
-                local currentSpeed = isCustomSpeed() and getSpeed() or 50
-                
-                if root.Name ~= "HumanoidRootPart" then
-                    flyBG.P = 9e6
-                    flyBG.D = 1000 
-                    root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                end
-                
-                flyBV.velocity = moveDir.Magnitude > 0 and moveDir.Unit * currentSpeed or Vector3.new(0, 0, 0)
-            end
+        end
+        
+        -- Freeze fall
+        if root:IsA("BasePart") then
+            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        end
+        
+        local camera = Workspace.CurrentCamera
+        local moveDir = Vector3.new(0,0,0)
+        
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.lookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.lookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.rightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.rightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+        
+        local currentSpeed = isCustomSpeed() and getSpeed() or 50
+        
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+            root.CFrame = root.CFrame + (moveDir * currentSpeed * deltaTime)
         end
     else
-        stopFly()
-    end
-end)
-
--- PLAYERS (ESP)
-createLabel(_t("PlayersLabel"), VisualsTab)
-local isESPEnabled = createToggle(_t("ESP"), VisualsTab)
-
-local espHighlights = {}
-
-connectSignal(RunService.RenderStepped, function()
-    if isESPEnabled() then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character then
-                if not espHighlights[player] then
-                    local hl = Instance.new("Highlight")
-                    hl.FillColor = Color3.fromRGB(255, 0, 0)
-                    hl.FillTransparency = 0.5
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    hl.Parent = player.Character
-                    espHighlights[player] = hl
-                elseif espHighlights[player].Parent ~= player.Character then
-                    espHighlights[player].Parent = player.Character
-                end
-            end
+        if flying then
+            flying = false
         end
-    else
-        for player, hl in pairs(espHighlights) do
-            if hl and hl.Parent then hl:Destroy() end
-        end
-        table.clear(espHighlights)
-    end
-end)
-
-connectSignal(Players.PlayerRemoving, function(player)
-    if espHighlights[player] then
-        espHighlights[player]:Destroy()
-        espHighlights[player] = nil
     end
 end)
 
 -- GRAPHICS & CPU OPTIMIZATION
+
 
 
 
