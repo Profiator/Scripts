@@ -432,7 +432,7 @@ connectSignal(UserInputService.InputBegan, function(input, gpe)
                     local part = prompt.Parent
                     if part:IsA("BasePart") and (part.Position - hrp.Position).Magnitude <= (prompt.MaxActivationDistance * 1.5) then
                         task.spawn(function()
-                            for i = 1, 100 do -- Spam interaction 100 times quickly
+                            for i = 1, 30 do -- Spam interaction 30 times quickly
                                 if fireproximityprompt then
                                     fireproximityprompt(prompt)
                                 else
@@ -568,9 +568,14 @@ local function handleFlyAndSpeed(deltaTime)
         end
         
         -- Move Fake Ground below player safely to bypass AntiFly without boosting up
-        if flyPlatform and hrp then
-            flyPlatform.CFrame = CFrame.new(hrp.Position + Vector3.new(0, -3.5, 0))
-            flyPlatform.AssemblyLinearVelocity = Vector3.zero
+        if flyPlatform then
+            local targetPos = hrp and hrp.Position or root.Position
+            if root ~= hrp then
+                targetPos = root.Position + Vector3.new(0, -6, 0)
+            else
+                targetPos = targetPos + Vector3.new(0, -3.1, 0)
+            end
+            flyPlatform.CFrame = CFrame.new(targetPos)
         end
         
         local moveDir = Vector3.new(0,0,0)
@@ -739,23 +744,33 @@ pcall(function()
     
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
-        local args = {...}
         
         if not checkcaller() then
             -- AntiCheat Blocker (Optimized to prevent lag)
             if method == "FireServer" or method == "InvokeServer" then
                 if typeof(self) == "Instance" then
                     local name = self.Name
-                    if blockedRemotes[name] == nil then
+                    local isBlocked = blockedRemotes[name]
+                    if isBlocked == nil then
                         local lowerName = string.lower(name)
                         if string.find(lowerName, "anticheat") or string.find(lowerName, "ac") or string.find(lowerName, "kick") or string.find(lowerName, "ban") or string.find(lowerName, "report") or string.find(lowerName, "log") then
                             blockedRemotes[name] = true
+                            isBlocked = true
                         else
                             blockedRemotes[name] = false
+                            isBlocked = false
                         end
                     end
-                    if blockedRemotes[name] then
+                    if isBlocked then
                         return method == "InvokeServer" and nil or nil
+                    end
+                    
+                    local arg1 = ...
+                    if type(arg1) == "string" then
+                        local str = string.lower(arg1)
+                        if string.find(str, "fly") or string.find(str, "speed") or string.find(str, "hack") or string.find(str, "exploit") or string.find(str, "cheat") or string.find(str, "teleport") then
+                            return method == "InvokeServer" and nil or nil
+                        end
                     end
                 end
             end
@@ -764,11 +779,13 @@ pcall(function()
             if aimbotActive and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") then
                 local head = aimbotTarget.Character.Head
                 if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+                    local args = {...}
                     local origin = args[1].Origin
                     local direction = (head.Position - origin).Unit * args[1].Direction.Magnitude
                     args[1] = Ray.new(origin, direction)
                     return oldNamecall(self, unpack(args))
                 elseif method == "Raycast" then
+                    local args = {...}
                     local origin = args[1]
                     local direction = (head.Position - origin).Unit * args[2].Magnitude
                     args[2] = direction
