@@ -40,6 +40,27 @@ end)
 
 
 -- Hardcore Anti-Cheat Bypass
+
+-- Hide Anti-cheat popups
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            for _, gui in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                if gui:IsA("TextLabel") or gui:IsA("TextBox") then
+                    if gui.Text and (gui.Text:lower():find("anti%-cheat") or gui.Text:lower():find("antitp") or gui.Text:lower():find("rollback")) then
+                        local screenGui = gui:FindFirstAncestorWhichIsA("ScreenGui")
+                        if screenGui then
+                            screenGui:Destroy()
+                        else
+                            gui:Destroy()
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
 task.spawn(function()
     pcall(function()
         local function bypassAC(char)
@@ -127,11 +148,6 @@ pcall(function()
     mt.__newindex = newcclosure(function(self, key, value)
         if not checkcaller() then
             if key == "WalkSpeed" or key == "JumpPower" then return end
-            -- Prevent the anti-cheat from setting our position back (rollback)
-            if (key == "CFrame" or key == "Position") and self.Name == "HumanoidRootPart" then
-                -- if a non-synapse script tries to teleport us, block it
-                return
-            end
         end
         return oldNewIndex(self, key, value)
     end)
@@ -179,7 +195,18 @@ end
 
 local function teleportTo(targetPos, keepVehicle)
     local root = getCharRoot(keepVehicle)
-    if root then
+    if not root then return end
+    
+    local char = root.Parent
+    if char and char:IsA("Model") then
+        pcall(function()
+            if root:IsA("BasePart") then
+                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end
+        end)
+        char:PivotTo(CFrame.new(targetPos))
+    else
         root.CFrame = CFrame.new(targetPos)
     end
 end
