@@ -547,6 +547,7 @@ connectSignal(UserInputService.InputEnded, function(input, gpe)
     end
 end)
 
+local isFarmPlaying = false
 local flying = false
 local flyActiveTime = 0
 local function handleFlyAndSpeed(deltaTime)
@@ -566,7 +567,7 @@ local function handleFlyAndSpeed(deltaTime)
         humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
     end
 
-    local currentSpeedActive = isCustomSpeed() or speedHoldActive
+    local currentSpeedActive = isCustomSpeed() or speedHoldActive or isFarmPlaying
 
     -- Custom Speed Logic (Works for Walk & Vehicles)
     if currentSpeedActive and not isFlyEnabled() then
@@ -574,7 +575,7 @@ local function handleFlyAndSpeed(deltaTime)
             -- Vehicle Speed bypass
             local seat = humanoid.SeatPart
             if seat.Throttle ~= 0 then
-                local speedStr = getSpeed()
+                local speedStr = isFarmPlaying and 300 or getSpeed()
                 local moveDir = root.CFrame.lookVector * seat.Throttle
                 root.AssemblyLinearVelocity = Vector3.new(
                     moveDir.X * speedStr,
@@ -585,7 +586,8 @@ local function handleFlyAndSpeed(deltaTime)
         else
             -- Character Speed
             if humanoid.MoveDirection.Magnitude > 0 then
-                local speedDiff = getSpeed() - humanoid.WalkSpeed
+                local speedStr = isFarmPlaying and 300 or getSpeed()
+                local speedDiff = speedStr - humanoid.WalkSpeed
                 if speedDiff > 0 then
                     local displacement = humanoid.MoveDirection * (speedDiff * deltaTime)
                     if hrp then
@@ -1142,7 +1144,24 @@ local recordTimer = 0
 local playIndex = 1
 local playStuckTimer = 0
 
+local ProximityPromptService = game:GetService("ProximityPromptService")
+connectSignal(ProximityPromptService.PromptTriggered, function(prompt, player)
+    if player == LocalPlayer and isRecording() then
+        local root = getCharRoot()
+        local pos = root and root.Position or Vector3.zero
+        local lastPoint = routePoints[#routePoints]
+        if lastPoint and lastPoint.type == "interact" and lastPoint.prompt == prompt then
+            if tick() - (lastPoint.time or 0) < 0.5 then
+                return
+            end
+        end
+        table.insert(routePoints, { type = "interact", prompt = prompt, pos = pos, time = tick() })
+        clearRouteBtn.Text = "Очистить маршрут (Точек: " .. #routePoints .. ")"
+    end
+end)
+
 connectSignal(RunService.Heartbeat, function(dt)
+    isFarmPlaying = isPlaying()
     if isRecording() then
         if isPlaying() then setPlaying(false) end
         recordTimer = recordTimer + dt
@@ -1152,13 +1171,16 @@ connectSignal(RunService.Heartbeat, function(dt)
             if root then
                 -- Не спамить точки, если стоим на месте
                 local add = true
-                if #routePoints > 0 then
-                    if (routePoints[#routePoints] - root.Position).Magnitude < 2 then
+                local lastPoint = routePoints[#routePoints]
+                if lastPoint then
+                    if lastPoint.type == "move" and (lastPoint.pos - root.Position).Magnitude < 2 then
+                        add = false
+                    elseif lastPoint.type == "interact" and (lastPoint.pos - root.Position).Magnitude < 2 then
                         add = false
                     end
                 end
                 if add then
-                    table.insert(routePoints, root.Position)
+                    table.insert(routePoints, { type = "move", pos = root.Position })
                     clearRouteBtn.Text = "Очистить маршрут (Точек: " .. #routePoints .. ")"
                 end
             end
@@ -1176,23 +1198,57 @@ connectSignal(RunService.Heartbeat, function(dt)
         local root = getCharRoot()
         local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
         if root and humanoid then
-            local targetPos = routePoints[playIndex]
+            local currentPoint = routePoints[playIndex]
+            local targetPos = currentPoint.pos
             local distXZ = (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude
 
-            if distXZ < 3 then
-                playIndex = playIndex + 1
-                if playIndex > #routePoints then playIndex = 1 end
-                playStuckTimer = 0
-            else
-                humanoid:MoveTo(targetPos)
-                if targetPos.Y - root.Position.Y > 2 then
-                    humanoid.Jump = true
-                end
-                playStuckTimer = playStuckTimer + dt
-                if playStuckTimer > 2 then
+            if currentPoint.type == "move" then
+                if distXZ < 3 then
                     playIndex = playIndex + 1
                     if playIndex > #routePoints then playIndex = 1 end
                     playStuckTimer = 0
+                else
+                    humanoid:MoveTo(targetPos)
+                    if targetPos.Y - root.Position.Y > 2 then
+                        humanoid.Jump = true
+                    end
+                    playStuckTimer = playStuckTimer + dt
+                    if playStuckTimer > 2 then
+                        playIndex = playIndex + 1
+                        if playIndex > #routePoints then playIndex = 1 end
+                        playStuckTimer = 0
+                    end
+                end
+            elseif currentPoint.type == "interact" then
+                if distXZ < 10 then
+                    if currentPoint.prompt and currentPoint.prompt.Parent then
+                        task.spawn(function()
+                            for i = 1, 5 do
+                                if fireproximityprompt then
+                                    fireproximityprompt(currentPoint.prompt)
+                                else
+                                    currentPoint.prompt:InputHoldBegin()
+                                    task.wait(0.1)
+                                    currentPoint.prompt:InputHoldEnd()
+                                end
+                                task.wait(0.1)
+                            end
+                        end)
+                    end
+                    playIndex = playIndex + 1
+                    if playIndex > #routePoints then playIndex = 1 end
+                    playStuckTimer = 0
+                else
+                    humanoid:MoveTo(targetPos)
+                    if targetPos.Y - root.Position.Y > 2 then
+                        humanoid.Jump = true
+                    end
+                    playStuckTimer = playStuckTimer + dt
+                    if playStuckTimer > 2 then
+                        playIndex = playIndex + 1
+                        if playIndex > #routePoints then playIndex = 1 end
+                        playStuckTimer = 0
+                    end
                 end
             end
         end
