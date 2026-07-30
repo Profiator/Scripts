@@ -749,30 +749,42 @@ pcall(function()
     mt.__index = newcclosure(function(self, key)
         if not checkcaller() then
             if key == "FloorMaterial" or key == "Sit" or key == "WalkSpeed" then
-                if typeof(self) == "Instance" and self:IsA("Humanoid") then
-                    if key == "WalkSpeed" then
-                        if isCustomSpeed() then return 16 end
-                    elseif isFlyEnabled() or isCustomSpeed() or isTPing then
-                        if key == "FloorMaterial" then return Enum.Material.Plastic end
-                        if key == "Sit" then return true end
+                if typeof(self) == "Instance" then
+                    local className = oldIndex(self, "ClassName")
+                    if className == "Humanoid" then
+                        if key == "WalkSpeed" then
+                            if isCustomSpeed() then return 16 end
+                        elseif isFlyEnabled() or isCustomSpeed() or isTPing then
+                            if key == "FloorMaterial" then return Enum.Material.Plastic end
+                            if key == "Sit" then return true end
+                        end
                     end
                 end
             elseif key == "Velocity" or key == "AssemblyLinearVelocity" then
-                if typeof(self) == "Instance" and self.Name == "HumanoidRootPart" and self:IsA("BasePart") then
-                    if isFlyEnabled() or isCustomSpeed() or isTPing then
-                        return Vector3.zero
+                if typeof(self) == "Instance" then
+                    local name = oldIndex(self, "Name")
+                    if name == "HumanoidRootPart" then
+                        if isFlyEnabled() or isCustomSpeed() or isTPing then
+                            return Vector3.zero
+                        end
                     end
                 end
             elseif key == "Hit" or key == "Target" or key == "UnitRay" then
-                if aimbotActive and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and typeof(self) == "Instance" and self:IsA("Mouse") then
-                    if key == "Hit" then
-                        return aimbotTarget.Character.Head.CFrame
-                    elseif key == "Target" then
-                        return aimbotTarget.Character.Head
-                    elseif key == "UnitRay" then
-                        local origin = Camera.CFrame.Position
-                        local head = aimbotTarget.Character.Head.Position
-                        return Ray.new(origin, (head - origin).Unit)
+                if aimbotActive and aimbotTarget and typeof(self) == "Instance" then
+                    local className = oldIndex(self, "ClassName")
+                    if className == "Mouse" then
+                        local char = aimbotTarget.Character
+                        local head = char and char:FindFirstChild("Head")
+                        if head then
+                            if key == "Hit" then
+                                return head.CFrame
+                            elseif key == "Target" then
+                                return head
+                            elseif key == "UnitRay" then
+                                local origin = Camera.CFrame.Position
+                                return Ray.new(origin, (head.Position - origin).Unit)
+                            end
+                        end
                     end
                 end
             end
@@ -786,33 +798,49 @@ pcall(function()
         local method = getnamecallmethod()
         
         if not checkcaller() then
-            if method == "GetState" and typeof(self) == "Instance" and self:IsA("Humanoid") then
-                if isFlyEnabled() or isCustomSpeed() or isTPing then
-                    return Enum.HumanoidStateType.Running
+            if method == "GetState" and typeof(self) == "Instance" then
+                local className = oldIndex(self, "ClassName")
+                if className == "Humanoid" then
+                    if isFlyEnabled() or isCustomSpeed() or isTPing then
+                        return Enum.HumanoidStateType.Running
+                    end
                 end
             end
             
             -- AntiCheat Blocker (Optimized to prevent lag)
             if method == "FireServer" or method == "InvokeServer" then
                 if typeof(self) == "Instance" then
-                    local name = self.Name
+                    local name = oldIndex(self, "Name")
                     
                     if isAnalyzing then
-                        local args = {...}
-                        local strArgs = {}
-                        for i, v in ipairs(args) do
-                            strArgs[i] = type(v) == "string" and ('"' .. v .. '"') or tostring(v)
-                        end
-                        local msg = "[" .. method .. "] " .. name .. " | Args: " .. table.concat(strArgs, ", ")
-                        if #loggedEvents > 100 then table.remove(loggedEvents, 1) end
-                        table.insert(loggedEvents, msg)
-                        pendingLogs = true
+                        pcall(function()
+                            local args = {...}
+                            local strArgs = {}
+                            for i = 1, math.min(#args, 5) do
+                                local v = args[i]
+                                local t = type(v)
+                                if t == "string" then
+                                    strArgs[i] = '"' .. string.sub(v, 1, 30) .. '"'
+                                elseif t == "number" or t == "boolean" then
+                                    strArgs[i] = tostring(v)
+                                elseif typeof(v) == "Instance" then
+                                    strArgs[i] = oldIndex(v, "ClassName")
+                                else
+                                    strArgs[i] = typeof(v)
+                                end
+                            end
+                            local msg = "[" .. method .. "] " .. tostring(name) .. " | " .. table.concat(strArgs, ", ")
+                            if #loggedEvents > 50 then table.remove(loggedEvents, 1) end
+                            table.insert(loggedEvents, msg)
+                            pendingLogs = true
+                        end)
                     end
                     
                     local isBlocked = blockedRemotes[name]
                     if isBlocked == nil then
                         local lowerName = string.lower(name)
-                        if string.find(lowerName, "anticheat") or string.find(lowerName, "ac") or string.find(lowerName, "kick") or string.find(lowerName, "ban") or string.find(lowerName, "report") or string.find(lowerName, "log") then
+                        -- Строгая проверка, чтобы не блокировать 'Character', 'Interact', 'Backpack' (содержат ac) или 'Dialog' (содержит log)
+                        if string.find(lowerName, "anticheat") or string.find(lowerName, "anti_cheat") or lowerName == "ac" or string.find(lowerName, "kick") or string.find(lowerName, "ban") or lowerName == "crash" or string.find(lowerName, "report") then
                             blockedRemotes[name] = true
                             isBlocked = true
                         else
@@ -823,35 +851,36 @@ pcall(function()
                     if isBlocked then
                         return method == "InvokeServer" and nil or nil
                     end
-                    
-                    local arg1 = ...
-                    if type(arg1) == "string" then
-                        local str = string.lower(arg1)
-                        if string.find(str, "fly") or string.find(str, "speed") or string.find(str, "hack") or string.find(str, "exploit") or string.find(str, "cheat") or string.find(str, "teleport") then
-                            return method == "InvokeServer" and nil or nil
-                        end
-                    end
                 end
             end
             
             -- Silent Aim
-            if aimbotActive and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") then
-                local head = aimbotTarget.Character.Head
-                if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-                    local args = {...}
-                    local origin = args[1].Origin
-                    local direction = (head.Position - origin).Unit * args[1].Direction.Magnitude
-                    args[1] = Ray.new(origin, direction)
-                    return oldNamecall(self, unpack(args))
-                elseif method == "Raycast" then
-                    local args = {...}
-                    local origin = args[1]
-                    local direction = (head.Position - origin).Unit * args[2].Magnitude
-                    args[2] = direction
-                    return oldNamecall(self, unpack(args))
-                elseif method == "ScreenPointToRay" or method == "ViewportPointToRay" then
-                    local origin = self.CFrame.Position
-                    return Ray.new(origin, (head.Position - origin).Unit)
+            if aimbotActive and aimbotTarget then
+                if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "Raycast" or method == "ScreenPointToRay" or method == "ViewportPointToRay" then
+                    local char = aimbotTarget.Character
+                    local head = char and char:FindFirstChild("Head")
+                    if head then
+                        if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+                            local args = {...}
+                            if typeof(args[1]) == "Ray" then
+                                local origin = args[1].Origin
+                                local direction = (head.Position - origin).Unit * args[1].Direction.Magnitude
+                                args[1] = Ray.new(origin, direction)
+                                return oldNamecall(self, unpack(args))
+                            end
+                        elseif method == "Raycast" then
+                            local args = {...}
+                            if typeof(args[1]) == "Vector3" and typeof(args[2]) == "Vector3" then
+                                local origin = args[1]
+                                local direction = (head.Position - origin).Unit * args[2].Magnitude
+                                args[2] = direction
+                                return oldNamecall(self, unpack(args))
+                            end
+                        elseif method == "ScreenPointToRay" or method == "ViewportPointToRay" then
+                            local origin = oldIndex(self, "CFrame").Position
+                            return Ray.new(origin, (head.Position - origin).Unit)
+                        end
+                    end
                 end
             end
         end
@@ -1106,7 +1135,8 @@ logScroll.Parent = AnalyzerTab
 Instance.new("UICorner", logScroll).CornerRadius = UDim.new(0, 6)
 
 local logLabel = Instance.new("TextLabel")
-logLabel.Size = UDim2.new(1, -10, 1, -10)
+logLabel.Size = UDim2.new(1, -10, 0, 0)
+logLabel.AutomaticSize = Enum.AutomaticSize.Y
 logLabel.Position = UDim2.new(0, 5, 0, 5)
 logLabel.BackgroundTransparency = 1
 logLabel.Text = ""
@@ -1122,8 +1152,8 @@ function updateAnalyzerUI()
     local text = table.concat(loggedEvents, "\n")
     logLabel.Text = text
     pcall(function()
-        local bounds = game:GetService("TextService"):GetTextSize(text, 12, Enum.Font.Code, Vector2.new(logScroll.AbsoluteSize.X - 10, 99999))
-        logLabel.Size = UDim2.new(1, -10, 0, bounds.Y + 20)
+        task.wait(0.05)
+        logScroll.CanvasPosition = Vector2.new(0, logScroll.AbsoluteCanvasSize.Y)
     end)
 end
 
