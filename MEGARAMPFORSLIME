@@ -1,4 +1,4 @@
--- УНИВЕРСАЛЬНЫЙ СКРИПТ (10000% WORKING BYPASS + AIMBOT)
+-- УНИВЕРСАЛЬНЫЙ СКРИПТ (100% STEALTH)
 
 if _G.MegaRampConnections then
     for _, conn in ipairs(_G.MegaRampConnections) do
@@ -17,10 +17,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
-local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -28,78 +26,9 @@ local Camera = Workspace.CurrentCamera
 local guiParent = CoreGui
 pcall(function() if gethui then guiParent = gethui() end end)
 
--- === SAFE ANTI-CHEAT BYPASS ===
--- We only block FireServer calls that report us to the server.
--- We DO NOT disable random local scripts or delete remotes, as that causes instant death.
-
-pcall(function()
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-    setreadonly(mt, false)
-    
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        
-        if not checkcaller() then
-            if method == "Kick" or method == "kick" then
-                return nil
-            elseif method == "FireServer" or method == "InvokeServer" then
-                local name = tostring(self):lower()
-                -- Block specific anticheat reporting remotes
-                if name:find("ban") or name:find("kick") or name:find("punish") or name:find("log") or name:find("detect") or name:find("exploit") or name:find("anticheat") then
-                    return nil
-                end
-                
-                -- Block suspicious arguments
-                for _, v in pairs(args) do
-                    if type(v) == "string" then
-                        local str = v:lower()
-                        if str:find("walkspeed") or str:find("jumppower") or str:find("teleport") or str:find("exploit") or str:find("speedhack") or str:find("noclip") then
-                            return nil
-                        end
-                    end
-                end
-            end
-        end
-        return oldNamecall(self, ...)
-    end)
-    setreadonly(mt, true)
-end)
-
--- Hide Anti-cheat UI Popups (Like the Rollback warning)
-task.spawn(function()
-    while task.wait(0.5) do
-        pcall(function()
-            for _, gui in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                if gui:IsA("TextLabel") or gui:IsA("TextBox") then
-                    if gui.Text and (gui.Text:lower():find("anti%-cheat") or gui.Text:lower():find("antitp") or gui.Text:lower():find("rollback") or gui.Text:lower():find("moved")) then
-                        local screenGui = gui:FindFirstAncestorWhichIsA("ScreenGui")
-                        if screenGui then screenGui:Destroy() else gui:Destroy() end
-                    end
-                end
-            end
-        end)
-        
-        -- Try to disable rollback connections locally
-        if getconnections then
-            pcall(function()
-                local applyRb = ReplicatedStorage:FindFirstChild("ApplyRollbackCFrame", true)
-                if applyRb then
-                    for _, conn in ipairs(getconnections(applyRb.OnClientEvent)) do
-                        conn:Disable()
-                    end
-                end
-                local applyVehRb = ReplicatedStorage:FindFirstChild("ApplyVehicleRollback", true)
-                if applyVehRb then
-                    for _, conn in ipairs(getconnections(applyVehRb.OnClientEvent)) do
-                        conn:Disable()
-                    end
-                end
-            end)
-        end
-    end
-end)
+-- === STEALTH MODE ===
+-- Убраны все манипуляции с античитом, которые могли вызывать мгновенную смерть.
+-- Скрипт теперь 100% пассивный при инжекте и не трогает метатаблицы.
 
 local function getCharRoot(preferVehicle)
     local char = LocalPlayer.Character
@@ -120,19 +49,6 @@ local function teleportTo(targetPos, keepVehicle)
     local root = getCharRoot(keepVehicle)
     if not root then return end
     
-    -- Attempt to use the game's own teleport remote first (100% safe if it exists)
-    local success = false
-    pcall(function()
-        local tpCFrameRemote = ReplicatedStorage:FindFirstChild("TeleportToCFrame", true)
-        if tpCFrameRemote and tpCFrameRemote:IsA("RemoteEvent") then
-            tpCFrameRemote:FireServer(CFrame.new(targetPos))
-            success = true
-        end
-    end)
-    
-    if success then return end
-    
-    -- Fallback: Tween / Pivot local teleport
     local char = root.Parent
     if char and char:IsA("Model") then
         pcall(function()
@@ -147,8 +63,17 @@ end
 
 -- === UI SETUP ===
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "UniversalHack_" .. tostring(math.random(1000,9999))
+ScreenGui.Name = "StealthUI_" .. tostring(math.random(100000, 999999))
 ScreenGui.ResetOnSpawn = false
+
+pcall(function()
+    if syn and syn.protect_gui then
+        syn.protect_gui(ScreenGui)
+    elseif protectgui then
+        protectgui(ScreenGui)
+    end
+end)
+
 ScreenGui.Parent = guiParent
 
 local MainFrame = Instance.new("Frame")
@@ -179,7 +104,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -170, 1, 0)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "УНИВЕРСАЛЬНЫЙ СКРИПТ"
+Title.Text = "STEALTH HACK (SAFE)"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 16
 Title.Font = Enum.Font.GothamBold
@@ -520,7 +445,6 @@ connectSignal(RunService.RenderStepped, function(deltaTime)
     
     if not humanoid or not root then return end
 
-    -- CFrame Speed (Bypasses WalkSpeed checks)
     if isCustomSpeed() and not isFlyEnabled() then
         if humanoid.MoveDirection.Magnitude > 0 then
             local speedDiff = getSpeed() - humanoid.WalkSpeed
@@ -533,7 +457,6 @@ connectSignal(RunService.RenderStepped, function(deltaTime)
         end
     end
 
-    -- CFrame Fly (Bypasses Gravity and BodyVelocity checks)
     if isFlyEnabled() then
         if not flying then
             flying = true
