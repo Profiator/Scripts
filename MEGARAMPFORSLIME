@@ -491,6 +491,7 @@ connectSignal(UserInputService.JumpRequest, function()
 end)
 
 local speedBindKey = nil
+local speedBindType = nil
 local isBindingSpeed = false
 local speedHoldActive = false
 
@@ -529,21 +530,39 @@ connectSignal(speedBindButton.MouseButton1Click, function()
 end)
 
 connectSignal(UserInputService.InputBegan, function(input, gpe)
-    if isBindingSpeed and input.UserInputType == Enum.UserInputType.Keyboard then
-        speedBindKey = input.KeyCode
-        speedBindButton.Text = speedBindKey.Name
-        speedBindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-        isBindingSpeed = false
-        return
+    if isBindingSpeed then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            speedBindType = "Keyboard"
+            speedBindKey = input.KeyCode
+            speedBindButton.Text = speedBindKey.Name
+            speedBindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+            isBindingSpeed = false
+            return
+        elseif string.find(input.UserInputType.Name, "MouseButton") and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            speedBindType = "Mouse"
+            speedBindKey = input.UserInputType
+            speedBindButton.Text = string.gsub(speedBindKey.Name, "MouseButton", "MB")
+            speedBindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+            isBindingSpeed = false
+            return
+        end
     end
-    if not gpe and speedBindKey and input.KeyCode == speedBindKey then
-        speedHoldActive = true
+    if not gpe and speedBindKey then
+        if speedBindType == "Keyboard" and input.KeyCode == speedBindKey then
+            speedHoldActive = true
+        elseif speedBindType == "Mouse" and input.UserInputType == speedBindKey then
+            speedHoldActive = true
+        end
     end
 end)
 
 connectSignal(UserInputService.InputEnded, function(input, gpe)
-    if not gpe and speedBindKey and input.KeyCode == speedBindKey then
-        speedHoldActive = false
+    if not gpe and speedBindKey then
+        if speedBindType == "Keyboard" and input.KeyCode == speedBindKey then
+            speedHoldActive = false
+        elseif speedBindType == "Mouse" and input.UserInputType == speedBindKey then
+            speedHoldActive = false
+        end
     end
 end)
 
