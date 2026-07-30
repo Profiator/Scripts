@@ -1,34 +1,30 @@
--- УНИВЕРСАЛЬНЫЙ СКРИПТ (100% STEALTH)
+-- САН ДИЕГО (УНИВЕРСАЛЬНЫЙ СКРИПТ)
 
-if _G.MegaRampConnections then
-    for _, conn in ipairs(_G.MegaRampConnections) do
+if _G.SanDiegoConnections then
+    for _, conn in ipairs(_G.SanDiegoConnections) do
         pcall(function() if conn and conn.Connected then conn:Disconnect() end end)
     end
 end
-_G.MegaRampConnections = {}
+_G.SanDiegoConnections = {}
 
 local function connectSignal(signal, callback)
     local conn = signal:Connect(callback)
-    table.insert(_G.MegaRampConnections, conn)
+    table.insert(_G.SanDiegoConnections, conn)
     return conn
 end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
 local guiParent = CoreGui
 pcall(function() if gethui then guiParent = gethui() end end)
-
--- === STEALTH MODE ===
--- Убраны все манипуляции с античитом, которые могли вызывать мгновенную смерть.
--- Скрипт теперь 100% пассивный при инжекте и не трогает метатаблицы.
 
 local function getCharRoot(preferVehicle)
     local char = LocalPlayer.Character
@@ -44,27 +40,20 @@ local function getCharRoot(preferVehicle)
     return char:FindFirstChild("HumanoidRootPart")
 end
 
--- Server-Side Teleport Bypass (Uses internal game remotes)
-local function teleportTo(targetPos, keepVehicle)
-    local root = getCharRoot(keepVehicle)
-    if not root then return end
-    
-    local char = root.Parent
-    if char and char:IsA("Model") then
-        pcall(function()
-            if root:IsA("BasePart") then
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            end
-        end)
-        char:PivotTo(CFrame.new(targetPos))
-    end
-end
+-- === АНТИЧИТ ОБХОД (ПЛАТФОРМА ДЛЯ АНТИ-ФЛАЯ) ===
+local flyPlatform = Instance.new("Part")
+flyPlatform.Size = Vector3.new(10, 2, 10)
+flyPlatform.Transparency = 1
+flyPlatform.Anchored = true
+flyPlatform.CanCollide = true
+flyPlatform.Name = "SanDiegoPlatform"
+pcall(function() flyPlatform.Parent = Workspace end)
 
 -- === UI SETUP ===
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "StealthUI_" .. tostring(math.random(100000, 999999))
+ScreenGui.Name = "SanDiegoUI_" .. tostring(math.random(100000, 999999))
 ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
 
 pcall(function()
     if syn and syn.protect_gui then
@@ -104,7 +93,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -170, 1, 0)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "STEALTH HACK (SAFE)"
+Title.Text = "САН ДИЕГО"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 16
 Title.Font = Enum.Font.GothamBold
@@ -163,12 +152,13 @@ connectSignal(MinimizeBtn.MouseButton1Click, function()
 end)
 
 connectSignal(CloseBtn.MouseButton1Click, function()
-    if _G.MegaRampConnections then
-        for _, conn in ipairs(_G.MegaRampConnections) do
+    if _G.SanDiegoConnections then
+        for _, conn in ipairs(_G.SanDiegoConnections) do
             pcall(function() if conn and conn.Connected then conn:Disconnect() end end)
         end
-        _G.MegaRampConnections = {}
+        _G.SanDiegoConnections = {}
     end
+    if flyPlatform then flyPlatform:Destroy() end
     if ScreenGui then ScreenGui:Destroy() end
 end)
 
@@ -268,8 +258,8 @@ local function createLabel(text, parent)
     return Label
 end
 
-local function createToggle(text, parent)
-    local toggleState = false
+local function createToggle(text, parent, defaultState)
+    local toggleState = defaultState or false
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, 0, 0, 40)
     Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -290,14 +280,14 @@ local function createToggle(text, parent)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0, 40, 0, 20)
     Button.Position = UDim2.new(1, -50, 0.5, -10)
-    Button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    Button.BackgroundColor3 = toggleState and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(50, 50, 55)
     Button.Text = ""
     Button.Parent = Frame
     Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 10)
 
     local Circle = Instance.new("Frame")
     Circle.Size = UDim2.new(0, 16, 0, 16)
-    Circle.Position = UDim2.new(0, 2, 0.5, -8)
+    Circle.Position = toggleState and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
     Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Circle.Parent = Button
     Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
@@ -376,14 +366,14 @@ local function createSlider(text, min, max, default, parent)
     return function() return value end
 end
 
--- === TABS & LOGIC ===
-local MainTab = createTab("MAIN")
-local AimbotTab = createTab("AIMBOT")
-local VisualsTab = createTab("VISUALS")
-local TeleportsTab = createTab("TELEPORTS")
+-- === TABS ===
+local MainTab = createTab("ГЛАВНАЯ")
+local AimbotTab = createTab("АИМБОТ")
+local VisualsTab = createTab("ВИЗУАЛЫ")
+local TeleportsTab = createTab("ТЕЛЕПОРТЫ")
 
 -- PROFILE
-createLabel("PLAYER PROFILE", MainTab)
+createLabel("ПРОФИЛЬ", MainTab)
 local ProfileFrame = Instance.new("Frame")
 ProfileFrame.Size = UDim2.new(1, 0, 0, 70)
 ProfileFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -429,34 +419,50 @@ connectSignal(RunService.RenderStepped, function()
 end)
 
 -- FLY & SPEED
-createLabel("SPEED & FLY (UNDETECTED CFrame)", MainTab)
-local isCustomSpeed = createToggle("Enable Custom Speed", MainTab)
-local getSpeed = createSlider("Speed", 16, 300, 50, MainTab)
-local isFlyEnabled = createToggle("Free Fly", MainTab)
+createLabel("СКОРОСТЬ & ПОЛЕТ (ОБХОД АНТИЧИТА)", MainTab)
+local isCustomSpeed = createToggle("Включить скорость", MainTab)
+local getSpeed = createSlider("Скорость", 16, 300, 50, MainTab)
+local isFlyEnabled = createToggle("Свободный полет", MainTab)
 
 local flying = false
-
-connectSignal(RunService.RenderStepped, function(deltaTime)
+local function handleFlyAndSpeed(deltaTime)
     local char = LocalPlayer.Character
     if not char then return end
     
     local humanoid = char:FindFirstChild("Humanoid")
-    local root = getCharRoot(true)
+    local root = getCharRoot(true) -- Supports vehicles
     
     if not humanoid or not root then return end
 
+    -- Custom Speed Logic (Works for Walk & Vehicles)
     if isCustomSpeed() and not isFlyEnabled() then
-        if humanoid.MoveDirection.Magnitude > 0 then
-            local speedDiff = getSpeed() - humanoid.WalkSpeed
-            if speedDiff > 0 then
-                local displacement = humanoid.MoveDirection * (speedDiff * deltaTime)
-                if root:IsA("BasePart") then
-                    root.CFrame = root.CFrame + displacement
+        if humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
+            -- Vehicle Speed bypass
+            local currentVel = root.AssemblyLinearVelocity
+            local speedStr = getSpeed()
+            if humanoid.MoveDirection.Magnitude > 0 then
+                -- Push vehicle forward
+                root.AssemblyLinearVelocity = Vector3.new(
+                    currentVel.X + (humanoid.MoveDirection.X * (speedStr * deltaTime)),
+                    currentVel.Y,
+                    currentVel.Z + (humanoid.MoveDirection.Z * (speedStr * deltaTime))
+                )
+            end
+        else
+            -- Character Speed
+            if humanoid.MoveDirection.Magnitude > 0 then
+                local speedDiff = getSpeed() - humanoid.WalkSpeed
+                if speedDiff > 0 then
+                    local displacement = humanoid.MoveDirection * (speedDiff * deltaTime)
+                    if root:IsA("BasePart") then
+                        root.CFrame = root.CFrame + displacement
+                    end
                 end
             end
         end
     end
 
+    -- Fly Logic
     if isFlyEnabled() then
         if not flying then
             flying = true
@@ -464,6 +470,11 @@ connectSignal(RunService.RenderStepped, function(deltaTime)
                 root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                 root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             end
+        end
+        
+        -- Move Fake Ground below player to bypass AntiFly
+        if flyPlatform then
+            flyPlatform.CFrame = CFrame.new(root.Position + Vector3.new(0, -3.1, 0))
         end
         
         if root:IsA("BasePart") then
@@ -487,26 +498,45 @@ connectSignal(RunService.RenderStepped, function(deltaTime)
         if flying then
             flying = false
         end
+        -- Hide fake ground when not flying
+        if flyPlatform then
+            flyPlatform.CFrame = CFrame.new(0, -9999, 0)
+        end
     end
-end)
+end
+connectSignal(RunService.RenderStepped, handleFlyAndSpeed)
 
 -- AIMBOT
-createLabel("AIMBOT SETTINGS (HOLD Q TO AIM)", AimbotTab)
-local isAimbotEnabled = createToggle("Enable Aimbot", AimbotTab)
+createLabel("НАСТРОЙКИ АИМБОТА (ЗАЖАТЬ Q)", AimbotTab)
+local isAimbotEnabled = createToggle("Включить Аимбот", AimbotTab)
+local showFOV = createToggle("Показывать круг FOV", AimbotTab, true)
+local getAimbotFOV = createSlider("Радиус круга (FOV)", 10, 500, 150, AimbotTab)
 local aimbotTarget = nil
 
-local function getClosestPlayerToCharacter()
-    local closestDist = math.huge
+-- FOV Circle UI
+local fovCircle = Instance.new("Frame")
+fovCircle.BackgroundTransparency = 1
+fovCircle.Visible = false
+fovCircle.Parent = ScreenGui
+
+local fovStroke = Instance.new("UIStroke", fovCircle)
+fovStroke.Color = Color3.fromRGB(255, 255, 255)
+fovStroke.Thickness = 1.5
+
+local fovCorner = Instance.new("UICorner", fovCircle)
+fovCorner.CornerRadius = UDim.new(1, 0)
+
+local function getClosestPlayerToCursor()
+    local closestDist = getAimbotFOV()
     local closestPlayer = nil
-    local myRoot = getCharRoot(false)
     
-    if not myRoot then return nil end
+    local mousePos = UserInputService:GetMouseLocation()
 
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
             local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
             if onScreen then
-                local dist = (p.Character.Head.Position - myRoot.Position).Magnitude
+                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                 if dist < closestDist then
                     closestDist = dist
                     closestPlayer = p
@@ -520,7 +550,7 @@ end
 connectSignal(UserInputService.InputBegan, function(input, gpe)
     if gpe then return end
     if input.KeyCode == Enum.KeyCode.Q and isAimbotEnabled() then
-        aimbotTarget = getClosestPlayerToCharacter()
+        aimbotTarget = getClosestPlayerToCursor()
     end
 end)
 
@@ -531,15 +561,58 @@ connectSignal(UserInputService.InputEnded, function(input, gpe)
 end)
 
 connectSignal(RunService.RenderStepped, function()
+    -- Update FOV Circle
+    if showFOV() and isAimbotEnabled() then
+        fovCircle.Visible = true
+        local radius = getAimbotFOV()
+        fovCircle.Size = UDim2.new(0, radius * 2, 0, radius * 2)
+        local mousePos = UserInputService:GetMouseLocation()
+        fovCircle.Position = UDim2.new(0, mousePos.X - radius, 0, mousePos.Y - radius)
+    else
+        fovCircle.Visible = false
+    end
+
+    -- Update Aimbot
     if isAimbotEnabled() and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and UserInputService:IsKeyDown(Enum.KeyCode.Q) then
         local headPos = aimbotTarget.Character.Head.Position
         Camera.CFrame = CFrame.new(Camera.CFrame.Position, headPos)
+        
+        -- Also force the character to face the target so weapons shoot correctly
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local hrp = char.HumanoidRootPart
+            hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(headPos.X, hrp.Position.Y, headPos.Z))
+        end
     end
 end)
 
+-- Hook Mouse.Hit for weapons that use Mouse.Hit
+pcall(function()
+    local mt = getrawmetatable(game)
+    local oldIndex = mt.__index
+    setreadonly(mt, false)
+    
+    mt.__index = newcclosure(function(self, key)
+        if not checkcaller() then
+            if key == "Hit" and typeof(self) == "Instance" and self:IsA("Mouse") then
+                if isAimbotEnabled() and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+                    return aimbotTarget.Character.Head.CFrame
+                end
+            elseif key == "Target" and typeof(self) == "Instance" and self:IsA("Mouse") then
+                if isAimbotEnabled() and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+                    return aimbotTarget.Character.Head
+                end
+            end
+        end
+        return oldIndex(self, key)
+    end)
+    setreadonly(mt, true)
+end)
+
+
 -- VISUALS
-createLabel("PLAYERS (ESP)", VisualsTab)
-local isESPEnabled = createToggle("Enable ESP (Highlight)", VisualsTab)
+createLabel("ИГРОКИ (ESP)", VisualsTab)
+local isESPEnabled = createToggle("Включить подсветку", VisualsTab)
 local espHighlights = {}
 
 connectSignal(RunService.RenderStepped, function()
@@ -574,7 +647,23 @@ connectSignal(Players.PlayerRemoving, function(player)
 end)
 
 -- TELEPORTS
-createLabel("PLAYERS TELEPORT", TeleportsTab)
+local function teleportTo(targetPos, keepVehicle)
+    local root = getCharRoot(keepVehicle)
+    if not root then return end
+    
+    local char = root.Parent
+    if char and char:IsA("Model") then
+        pcall(function()
+            if root:IsA("BasePart") then
+                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end
+        end)
+        char:PivotTo(CFrame.new(targetPos))
+    end
+end
+
+createLabel("ТЕЛЕПОРТ К ИГРОКАМ", TeleportsTab)
 local PlayerListContainer = Instance.new("Frame")
 PlayerListContainer.Size = UDim2.new(1, 0, 0, 250)
 PlayerListContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -645,7 +734,7 @@ end
 local RefreshBtn = Instance.new("TextButton")
 RefreshBtn.Size = UDim2.new(1, 0, 0, 30)
 RefreshBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
-RefreshBtn.Text = "Refresh Player List"
+RefreshBtn.Text = "Обновить список"
 RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 RefreshBtn.Font = Enum.Font.GothamBold
 RefreshBtn.TextSize = 14
@@ -658,7 +747,7 @@ connectSignal(Players.PlayerRemoving, refreshPlayerList)
 refreshPlayerList()
 
 -- MENU TOGGLE
-createLabel("MENU TOGGLE HOTKEY", MainTab)
+createLabel("КНОПКА МЕНЮ", MainTab)
 local currentToggleKey = Enum.KeyCode.RightShift
 local isBindingKey = false
 
@@ -672,7 +761,7 @@ local bindLabel = Instance.new("TextLabel")
 bindLabel.Size = UDim2.new(1, -120, 1, 0)
 bindLabel.Position = UDim2.new(0, 10, 0, 0)
 bindLabel.BackgroundTransparency = 1
-bindLabel.Text = "Menu Toggle Key"
+bindLabel.Text = "Скрыть/Показать меню"
 bindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 bindLabel.Font = Enum.Font.Gotham
 bindLabel.TextSize = 14
