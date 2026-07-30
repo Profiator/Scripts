@@ -292,8 +292,8 @@ local function createToggle(text, parent, defaultState)
     Circle.Parent = Button
     Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
 
-    connectSignal(Button.MouseButton1Click, function()
-        toggleState = not toggleState
+    local function setToggle(state)
+        toggleState = state
         if toggleState then
             Button.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
             Circle:TweenPosition(UDim2.new(1, -18, 0.5, -8), "Out", "Quad", 0.2, true)
@@ -301,8 +301,12 @@ local function createToggle(text, parent, defaultState)
             Button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
             Circle:TweenPosition(UDim2.new(0, 2, 0.5, -8), "Out", "Quad", 0.2, true)
         end
+    end
+
+    connectSignal(Button.MouseButton1Click, function()
+        setToggle(not toggleState)
     end)
-    return function() return toggleState and ScreenGui and ScreenGui.Parent ~= nil end
+    return function() return toggleState and ScreenGui and ScreenGui.Parent ~= nil end, setToggle
 end
 
 local function createSlider(text, min, max, default, parent)
@@ -430,6 +434,10 @@ connectSignal(UserInputService.InputBegan, function(input, gpe)
             for _, prompt in ipairs(Workspace:GetDescendants()) do
                 if prompt:IsA("ProximityPrompt") and prompt.Enabled then
                     local part = prompt.Parent
+                    if part:IsA("VehicleSeat") or part:IsA("Seat") then continue end
+                    local actionLower = string.lower(prompt.ActionText)
+                    if string.match(actionLower, "sit") or string.match(actionLower, "drive") or string.match(actionLower, "enter") then continue end
+                    
                     if part:IsA("BasePart") and (part.Position - hrp.Position).Magnitude <= (prompt.MaxActivationDistance * 1.5) then
                         task.spawn(function()
                             for i = 1, 30 do -- Spam interaction 30 times quickly
@@ -453,17 +461,30 @@ end)
 -- FLY & SPEED
 createLabel("СКОРОСТЬ & ПОЛЕТ (ОБХОД АНТИЧИТА)", MainTab)
 local isCustomSpeed = createToggle("Включить скорость", MainTab)
-local getSpeed = createSlider("Скорость", 16, 1000, 100, MainTab)
-local isFlyEnabled = createToggle("Свободный полет", MainTab)
+local getSpeed = createSlider("Скорость", 16, 300, 100, MainTab)
+local isFlyEnabled, setFlyEnabled = createToggle("Свободный полет", MainTab)
 local isInfJump = createToggle("Бесконечный прыжок", MainTab)
+
+local lastGroundTime = tick()
+connectSignal(RunService.Heartbeat, function()
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum and hum.FloorMaterial ~= Enum.Material.Air then
+            lastGroundTime = tick()
+        end
+    end
+end)
 
 connectSignal(UserInputService.JumpRequest, function()
     if isInfJump() then
-        local char = LocalPlayer.Character
-        if char then
-            local humanoid = char:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        if tick() - lastGroundTime <= 3 then
+            local char = LocalPlayer.Character
+            if char then
+                local humanoid = char:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
             end
         end
     end
@@ -527,6 +548,7 @@ connectSignal(UserInputService.InputEnded, function(input, gpe)
 end)
 
 local flying = false
+local flyActiveTime = 0
 local function handleFlyAndSpeed(deltaTime)
     local char = LocalPlayer.Character
     if not char then return end
@@ -576,6 +598,14 @@ local function handleFlyAndSpeed(deltaTime)
 
     -- Fly Logic
     if isFlyEnabled() then
+        flyActiveTime = flyActiveTime + deltaTime
+        if flyActiveTime >= 3.5 then
+            setFlyEnabled(false)
+            flyActiveTime = 0
+            flying = false
+            return
+        end
+
         if not flying then
             flying = true
         end
@@ -627,6 +657,7 @@ local function handleFlyAndSpeed(deltaTime)
             root.AssemblyAngularVelocity = Vector3.zero
         end
     else
+        flyActiveTime = 0
         if flying then
             flying = false
         end
@@ -1083,6 +1114,93 @@ connectSignal(RefreshBtn.MouseButton1Click, refreshPlayerList)
 connectSignal(Players.PlayerAdded, refreshPlayerList)
 connectSignal(Players.PlayerRemoving, refreshPlayerList)
 refreshPlayerList()
+
+-- FARM ROUTE
+local FarmTab = createTab("ФАРМ")
+createLabel("МАРШРУТ (ФАРМ)", FarmTab)
+
+local isRecording, setRecording = createToggle("Запись маршрута", FarmTab)
+local isPlaying, setPlaying = createToggle("Воспроизведение маршрута", FarmTab)
+local routePoints = {}
+
+local clearRouteBtn = Instance.new("TextButton")
+clearRouteBtn.Size = UDim2.new(1, 0, 0, 30)
+clearRouteBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+clearRouteBtn.Text = "Очистить маршрут (Точек: 0)"
+clearRouteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+clearRouteBtn.Font = Enum.Font.GothamBold
+clearRouteBtn.TextSize = 14
+clearRouteBtn.Parent = FarmTab
+Instance.new("UICorner", clearRouteBtn).CornerRadius = UDim.new(0, 6)
+
+connectSignal(clearRouteBtn.MouseButton1Click, function()
+    routePoints = {}
+    clearRouteBtn.Text = "Очистить маршрут (Точек: 0)"
+end)
+
+local recordTimer = 0
+local playIndex = 1
+local playStuckTimer = 0
+
+connectSignal(RunService.Heartbeat, function(dt)
+    if isRecording() then
+        if isPlaying() then setPlaying(false) end
+        recordTimer = recordTimer + dt
+        if recordTimer >= 0.2 then
+            recordTimer = 0
+            local root = getCharRoot()
+            if root then
+                -- Не спамить точки, если стоим на месте
+                local add = true
+                if #routePoints > 0 then
+                    if (routePoints[#routePoints] - root.Position).Magnitude < 2 then
+                        add = false
+                    end
+                end
+                if add then
+                    table.insert(routePoints, root.Position)
+                    clearRouteBtn.Text = "Очистить маршрут (Точек: " .. #routePoints .. ")"
+                end
+            end
+        end
+    else
+        recordTimer = 0
+    end
+
+    if isPlaying() then
+        if isRecording() then setRecording(false) end
+        if #routePoints == 0 then
+            setPlaying(false)
+            return
+        end
+        local root = getCharRoot()
+        local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if root and humanoid then
+            local targetPos = routePoints[playIndex]
+            local distXZ = (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude
+
+            if distXZ < 3 then
+                playIndex = playIndex + 1
+                if playIndex > #routePoints then playIndex = 1 end
+                playStuckTimer = 0
+            else
+                humanoid:MoveTo(targetPos)
+                if targetPos.Y - root.Position.Y > 2 then
+                    humanoid.Jump = true
+                end
+                playStuckTimer = playStuckTimer + dt
+                if playStuckTimer > 2 then
+                    playIndex = playIndex + 1
+                    if playIndex > #routePoints then playIndex = 1 end
+                    playStuckTimer = 0
+                end
+            end
+        end
+    else
+        playIndex = 1
+        playStuckTimer = 0
+    end
+end)
 
 -- ANALYZER
 local AnalyzerTab = createTab("АНАЛИЗАТОР")
