@@ -645,6 +645,20 @@ local showFOV = createToggle("Показывать круг FOV (С оружие
 local getAimbotFOV = createSlider("Радиус круга (FOV)", 10, 500, 150, AimbotTab)
 local aimbotTarget = nil
 local aimbotActive = false
+local isTPing = false
+local isAnalyzing = false
+local loggedEvents = {}
+local updateAnalyzerUI = nil
+local pendingLogs = false
+
+task.spawn(function()
+    while task.wait(0.5) do
+        if pendingLogs and updateAnalyzerUI then
+            updateAnalyzerUI()
+            pendingLogs = false
+        end
+    end
+end)
 
 -- FOV Circle UI
 local fovCircle = Instance.new("Frame")
@@ -734,32 +748,23 @@ pcall(function()
     
     mt.__index = newcclosure(function(self, key)
         if not checkcaller() then
-            -- Anti-cheat bypasses for LocalChecks
-            if typeof(self) == "Instance" then
-                if self:IsA("Humanoid") then
-                    if key == "FloorMaterial" then
-                        if isFlyEnabled() or isCustomSpeed() or isTPing then
-                            return Enum.Material.Plastic
-                        end
-                    elseif key == "Sit" then
-                        if isFlyEnabled() or isCustomSpeed() or isTPing then
-                            return true
-                        end
-                    elseif key == "WalkSpeed" then
+            if key == "FloorMaterial" or key == "Sit" or key == "WalkSpeed" then
+                if typeof(self) == "Instance" and self:IsA("Humanoid") then
+                    if key == "WalkSpeed" then
                         if isCustomSpeed() then return 16 end
-                    end
-                elseif self:IsA("BasePart") and self.Name == "HumanoidRootPart" then
-                    if key == "Velocity" or key == "AssemblyLinearVelocity" then
-                        if isFlyEnabled() or isCustomSpeed() or isTPing then
-                            return Vector3.zero
-                        end
+                    elseif isFlyEnabled() or isCustomSpeed() or isTPing then
+                        if key == "FloorMaterial" then return Enum.Material.Plastic end
+                        if key == "Sit" then return true end
                     end
                 end
-            end
-            
-            -- Silent aim
-            if aimbotActive and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") then
-                if typeof(self) == "Instance" and self:IsA("Mouse") then
+            elseif key == "Velocity" or key == "AssemblyLinearVelocity" then
+                if typeof(self) == "Instance" and self.Name == "HumanoidRootPart" and self:IsA("BasePart") then
+                    if isFlyEnabled() or isCustomSpeed() or isTPing then
+                        return Vector3.zero
+                    end
+                end
+            elseif key == "Hit" or key == "Target" or key == "UnitRay" then
+                if aimbotActive and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and typeof(self) == "Instance" and self:IsA("Mouse") then
                     if key == "Hit" then
                         return aimbotTarget.Character.Head.CFrame
                     elseif key == "Target" then
@@ -798,9 +803,10 @@ pcall(function()
                         for i, v in ipairs(args) do
                             strArgs[i] = type(v) == "string" and ('"' .. v .. '"') or tostring(v)
                         end
-                        task.spawn(function()
-                            addLog("[" .. method .. "] " .. name .. " | Args: " .. table.concat(strArgs, ", "))
-                        end)
+                        local msg = "[" .. method .. "] " .. name .. " | Args: " .. table.concat(strArgs, ", ")
+                        if #loggedEvents > 100 then table.remove(loggedEvents, 1) end
+                        table.insert(loggedEvents, msg)
+                        pendingLogs = true
                     end
                     
                     local isBlocked = blockedRemotes[name]
@@ -894,7 +900,6 @@ connectSignal(Players.PlayerRemoving, function(player)
 end)
 
 -- TELEPORTS
-local isTPing = false
 local function teleportTo(targetPos, keepVehicle)
     local root = getCharRoot(keepVehicle)
     if not root then return end
@@ -1062,10 +1067,6 @@ refreshPlayerList()
 local AnalyzerTab = createTab("АНАЛИЗАТОР")
 createLabel("АНАЛИЗАТОР СЕТИ (ЛОГИ)", AnalyzerTab)
 
-local isAnalyzing = false
-local loggedEvents = {}
-local updateAnalyzerUI
-
 local toggleAnalyzerBtn = Instance.new("TextButton")
 toggleAnalyzerBtn.Size = UDim2.new(1, 0, 0, 30)
 toggleAnalyzerBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
@@ -1104,21 +1105,26 @@ logScroll.ScrollBarThickness = 4
 logScroll.Parent = AnalyzerTab
 Instance.new("UICorner", logScroll).CornerRadius = UDim.new(0, 6)
 
-local logLayout = Instance.new("UIListLayout")
-logLayout.SortOrder = Enum.SortOrder.LayoutOrder
-logLayout.Padding = UDim.new(0, 2)
-logLayout.Parent = logScroll
+local logLabel = Instance.new("TextLabel")
+logLabel.Size = UDim2.new(1, -10, 1, -10)
+logLabel.Position = UDim2.new(0, 5, 0, 5)
+logLabel.BackgroundTransparency = 1
+logLabel.Text = ""
+logLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+logLabel.TextSize = 12
+logLabel.Font = Enum.Font.Code
+logLabel.TextXAlignment = Enum.TextXAlignment.Left
+logLabel.TextYAlignment = Enum.TextYAlignment.Top
+logLabel.TextWrapped = true
+logLabel.Parent = logScroll
 
-function updateAnalyzerUI(msg)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, 0, 0, 16)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = " " .. msg
-    lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
-    lbl.TextSize = 11
-    lbl.Font = Enum.Font.Code
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = logScroll
+function updateAnalyzerUI()
+    local text = table.concat(loggedEvents, "\n")
+    logLabel.Text = text
+    pcall(function()
+        local bounds = game:GetService("TextService"):GetTextSize(text, 12, Enum.Font.Code, Vector2.new(logScroll.AbsoluteSize.X - 10, 99999))
+        logLabel.Size = UDim2.new(1, -10, 0, bounds.Y + 20)
+    end)
 end
 
 connectSignal(toggleAnalyzerBtn.MouseButton1Click, function()
@@ -1142,16 +1148,8 @@ end)
 
 connectSignal(clearAnalyzerBtn.MouseButton1Click, function()
     table.clear(loggedEvents)
-    for _, c in ipairs(logScroll:GetChildren()) do
-        if c:IsA("TextLabel") then c:Destroy() end
-    end
+    if updateAnalyzerUI then updateAnalyzerUI() end
 end)
-
-local function addLog(msg)
-    if #loggedEvents > 500 then table.remove(loggedEvents, 1) end
-    table.insert(loggedEvents, msg)
-    if updateAnalyzerUI then updateAnalyzerUI(msg) end
-end
 
 -- MENU TOGGLE
 createLabel("КНОПКА МЕНЮ", MainTab)
