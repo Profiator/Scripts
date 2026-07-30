@@ -1,5 +1,4 @@
--- MEGA RAMP FOR SLIME SCRIPT
--- UI & Logix rewrite for better design and functionality.
+-- УНИВЕРСАЛЬНЫЙ СКРИПТ (10000% WORKING BYPASS + AIMBOT)
 
 if _G.MegaRampConnections then
     for _, conn in ipairs(_G.MegaRampConnections) do
@@ -24,83 +23,69 @@ local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
 
-_G.ActionRecorder = {
-    Recording = false,
-    Logs = {}
-}
-
--- Anti-Cheat / GUI Protection
 local guiParent = CoreGui
-pcall(function()
-    if gethui then guiParent = gethui() end
-end)
+pcall(function() if gethui then guiParent = gethui() end end)
 
-
-
-
--- Hardcore Anti-Cheat Bypass
-
--- Hide Anti-cheat popups
-task.spawn(function()
-    while task.wait(0.5) do
-        pcall(function()
-            for _, gui in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                if gui:IsA("TextLabel") or gui:IsA("TextBox") then
-                    if gui.Text and (gui.Text:lower():find("anti%-cheat") or gui.Text:lower():find("antitp") or gui.Text:lower():find("rollback")) then
-                        local screenGui = gui:FindFirstAncestorWhichIsA("ScreenGui")
-                        if screenGui then
-                            screenGui:Destroy()
-                        else
-                            gui:Destroy()
-                        end
-                    end
-                end
-            end
-        end)
-    end
-end)
-
+-- === 10000% HARDCORE ANTI-CHEAT BYPASS ===
 task.spawn(function()
     pcall(function()
-        local function bypassAC(char)
-            if not char then return end
-            -- Attempt to find and disable anti-cheat local scripts
-            for _, v in pairs(char:GetDescendants()) do
-                if v:IsA("LocalScript") then
-                    local n = v.Name:lower()
-                    if n:find("anti") or n:find("detect") or n:find("crash") or n:find("cheat") or n:find("ban") or n:find("tp") or n:find("speed") or n:find("fly") then
-                        v.Disabled = true
-                    end
-                end
-            end
-            
-            -- Prevent teleportations / rollbacks by destroying any BodyMovers or AlignPositions that we didn't add
-            char.DescendantAdded:Connect(function(v)
-                if v:IsA("LocalScript") then
-                    local n = v.Name:lower()
-                    if n:find("anti") or n:find("detect") or n:find("cheat") then
-                        v.Disabled = true
-                    end
-                end
-            end)
-        end
-        bypassAC(LocalPlayer.Character)
-        LocalPlayer.CharacterAdded:Connect(bypassAC)
-        
-        -- Also scan PlayerScripts
-        for _, v in pairs(LocalPlayer:FindFirstChild("PlayerScripts"):GetDescendants()) do
+        -- 1. Disable local anti-cheat scripts
+        for _, v in pairs(LocalPlayer:GetDescendants()) do
             if v:IsA("LocalScript") then
                 local n = v.Name:lower()
-                if n:find("anti") or n:find("detect") or n:find("crash") or n:find("cheat") or n:find("ban") or n:find("tp") then
+                if n:find("anticheat") or n:find("detect") or n:find("crash") or n:find("rollback") then
                     v.Disabled = true
                 end
             end
         end
+
+        LocalPlayer.DescendantAdded:Connect(function(v)
+            if v:IsA("LocalScript") then
+                local n = v.Name:lower()
+                if n:find("anticheat") or n:find("detect") or n:find("crash") or n:find("rollback") then
+                    v.Disabled = true
+                end
+            end
+        end)
+
+        -- 2. Destroy anti-cheat / rollback remotes to break server-sided rollback
+        local rs = game:GetService("ReplicatedStorage")
+        local badNames = {"rollback", "exploit", "kick", "ban", "log", "detect", "suspicious"}
+        for _, v in pairs(rs:GetDescendants()) do
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                local n = v.Name:lower()
+                for _, bad in pairs(badNames) do
+                    if n:find(bad) then
+                        v:Destroy()
+                        break
+                    end
+                end
+            end
+        end
+
+        -- 3. Hide Anti-Cheat UI Popups
+        for _, gui in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+            if gui:IsA("TextLabel") or gui:IsA("TextBox") then
+                if gui.Text and (gui.Text:lower():find("anti%-cheat") or gui.Text:lower():find("antitp") or gui.Text:lower():find("rollback")) then
+                    local screenGui = gui:FindFirstAncestorWhichIsA("ScreenGui")
+                    if screenGui then screenGui:Destroy() else gui:Destroy() end
+                end
+            end
+        end
+        LocalPlayer.PlayerGui.DescendantAdded:Connect(function(gui)
+            if gui:IsA("TextLabel") or gui:IsA("TextBox") then
+                if gui.Text and (gui.Text:lower():find("anti%-cheat") or gui.Text:lower():find("antitp") or gui.Text:lower():find("rollback")) then
+                    local screenGui = gui:FindFirstAncestorWhichIsA("ScreenGui")
+                    if screenGui then screenGui:Destroy() else gui:Destroy() end
+                end
+            end
+        end)
     end)
 end)
 
--- Metatable Hooking for Hardcore Bypass
+-- Metatable Hooking
 pcall(function()
     local mt = getrawmetatable(game)
     local oldNamecall = mt.__namecall
@@ -117,12 +102,9 @@ pcall(function()
                 return nil
             elseif method == "FireServer" or method == "InvokeServer" then
                 local name = tostring(self):lower()
-                -- Block specific anti-cheat remotes
-                if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") or name:find("report") or name:find("crash") or name:find("error") or name:find("suspicious") or name:find("exploit") or name:find("admin") or name:find("anttp") or name:find("speed") then
+                if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") or name:find("report") or name:find("crash") or name:find("error") or name:find("suspicious") or name:find("exploit") or name:find("admin") or name:find("anttp") or name:find("speed") or name:find("rollback") then
                     return nil
                 end
-                
-                -- Sometimes anti-cheats send specific string flags in arguments
                 for _, v in pairs(args) do
                     if type(v) == "string" then
                         local str = v:lower()
@@ -136,7 +118,6 @@ pcall(function()
         return oldNamecall(self, ...)
     end)
     
-    -- Keep __index to hide walkspeed
     mt.__index = newcclosure(function(self, key)
         if not checkcaller() then
             if key == "WalkSpeed" then return 16 end
@@ -155,7 +136,6 @@ pcall(function()
     setreadonly(mt, true)
 end)
 
-
 local function getCharRoot(preferVehicle)
     local char = LocalPlayer.Character
     if not char then return nil end
@@ -170,41 +150,7 @@ local function getCharRoot(preferVehicle)
     return char:FindFirstChild("HumanoidRootPart")
 end
 
-local function getCar()
-    local char = LocalPlayer.Character
-    if char then
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
-            return humanoid.SeatPart:FindFirstAncestorWhichIsA("Model")
-        end
-    end
-    return nil
-end
-
-local function slideTo(targetPos, duration)
-    local root = getCharRoot(true)
-    if not root then return end
-    
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    local goal = {CFrame = CFrame.new(targetPos, targetPos + root.CFrame.lookVector)}
-    
-    local t = TweenService:Create(root, tweenInfo, goal)
-    t:Play()
-    t.Completed:Wait()
-end
-
 local function teleportTo(targetPos, keepVehicle)
-    local rs = game:GetService("ReplicatedStorage")
-    
-    -- Attempt 1: Try internal game remotes
-    pcall(function()
-        local tpEvent = rs:FindFirstChild("TeleportToCFrame", true)
-        if tpEvent and tpEvent:IsA("RemoteEvent") then
-            tpEvent:FireServer(CFrame.new(targetPos))
-        end
-    end)
-    
-    -- Attempt 2: Local TP with velocity reset
     local root = getCharRoot(keepVehicle)
     if not root then return end
     
@@ -222,259 +168,12 @@ local function teleportTo(targetPos, keepVehicle)
     end
 end
 
-local T = {
-    RU = {
-        Title = "УНИВЕРСАЛЬНЫЙ",
-        Profile = "ПРОФИЛЬ ИГРОКА",
-        Coords = "Координаты не найдены",
-        AutoFarm = "АВТО-ФАРМ",
-        EnableAutoFarm = "Включить Авто-Фарм",
-        Speed = "ПОЛЕТ И СКОРОСТЬ",
-        CustomSpeed = "Включить кастомную скорость",
-        SpeedSlider = "Скорость (Ходьба / Машина)",
-        Fly = "Свободный полет (Fly)",
-        Other = "ДРУГОЕ",
-        AntiAfk = "Анти-АФК",
-        Invis = "Невидимость (Локальная)",
-        Confirm = "Вы уверены, что хотите закрыть скрипт?",
-        Yes = "Да",
-        No = "Нет",
-        AFInfo = "Старт: 0, 124, -1537 | Конец рампы: 5, 101, -1205 | Финиш: 8, 3, 2803",
-        EventShop = "МАГАЗИН СОБЫТИЙ & БАЛАНС",
-        AutoBuyEvent = "Авто-покупка в событии",
-        TimerSelect = "Таймер события (сек)",
-        BalanceDisplay = "Баланс: 0 | Монеты: 0",
-        PlayersLabel = "ИГРОКИ (ESP)",
-        ESP = "Включить ESP (Подсветка игроков)",
-        TabMain = "ГЛАВНАЯ",
-        TabShop = "МАГАЗИН",
-        TabVisuals = "ВИЗУАЛ",
-        TabAnalysis = "АНАЛИТИКА",
-        TabPlayers = "ИГРОКИ",
-        TabTeleports = "ТЕЛЕПОРТЫ",
-        CopyLogs = "Скопировано в буфер обмена!",
-        Pets = "ПИТОМЦЫ",
-        AutoEquip = "Авто-экипировка (Best)",
-        CarMods = "МОДЫ НА МАШИНУ",
-        NoClip = "No-Clip (Сквозь стены)",
-        AutoFlip = "Авто-переворот машины",
-        InfJump = "Бесконечный прыжок",
-        Locations = "ЛОКАЦИИ",
-        TpCarShop = "Магазин Машин",
-        TpPaintShop = "Покрасочная",
-        TpMiniParkour = "Мини-Паркур",
-        TpEventShop = "Магазин Событий",
-        CpuSaver = "Энергосбережение (3D Выкл / CPU Saver)",
-        LowGraphics = "Ультра-Низкая Графика (ФПС Буст)",
-        CustomPathing = "КАСТОМНЫЙ МАРШРУТ",
-        RecordPath = "Записать маршрут (Rec)",
-        ClearPath = "Очистить маршрут",
-        UseCustomPath = "Использовать кастомный маршрут",
-        PanicSettings = "ГОРЯЧАЯ КЛАВИША МЕНЮ",
-        PanicBind = "Клавиша скрытия меню"
-    },
-    EN = {
-        Title = "УНИВЕРСАЛЬНЫЙ",
-        Profile = "PLAYER PROFILE",
-        Coords = "Coordinates not found",
-        AutoFarm = "AUTO-FARM",
-        EnableAutoFarm = "Enable Auto-Farm",
-        Speed = "FLIGHT & SPEED",
-        CustomSpeed = "Enable Custom Speed",
-        SpeedSlider = "Speed (Walk / Car)",
-        Fly = "Free Fly",
-        Other = "OTHER",
-        AntiAfk = "Anti-AFK",
-        Invis = "Invisibility (Local)",
-        Confirm = "Are you sure you want to close the script?",
-        Yes = "Yes",
-        No = "No",
-        AFInfo = "Start: 0, 124, -1537 | Ramp End: 5, 101, -1205 | Finish: 8, 3, 2803",
-        EventShop = "EVENT SHOP & BALANCE",
-        AutoBuyEvent = "Auto-Buy Event Items",
-        TimerSelect = "Event Timer (sec)",
-        BalanceDisplay = "Balance: 0 | Coins: 0",
-        PlayersLabel = "PLAYERS (ESP)",
-        ESP = "Enable ESP (Highlight)",
-        TabMain = "MAIN",
-        TabShop = "EVENT SHOP",
-        TabVisuals = "VISUALS",
-        TabAnalysis = "ANALYSIS",
-        TabPlayers = "PLAYERS",
-        TabTeleports = "TELEPORTS",
-        CopyLogs = "Copied to clipboard!",
-        Pets = "PETS",
-        AutoEquip = "Auto-Equip Best",
-        CarMods = "CAR MODS",
-        NoClip = "No-Clip (Ghost)",
-        AutoFlip = "Auto-Flip Car",
-        InfJump = "Infinite Jump",
-        Locations = "LOCATIONS",
-        TpCarShop = "Car Shop",
-        TpPaintShop = "Paint Shop",
-        TpMiniParkour = "Mini Parkour",
-        TpEventShop = "Event Shop",
-        CpuSaver = "CPU / GPU Saver (3D Off)",
-        LowGraphics = "Ultra Low Graphics (FPS Boost)",
-        CustomPathing = "CUSTOM PATHING",
-        RecordPath = "Record Path (Rec)",
-        ClearPath = "Clear Path",
-        UseCustomPath = "Use Custom Path",
-        PanicSettings = "MENU TOGGLE HOTKEY",
-        PanicBind = "Menu Toggle Key"
-    },
-    ZH = {
-        Title = "УНИВЕРСАЛЬНЫЙ",
-        Profile = "玩家资料",
-        Coords = "未找到坐标",
-        AutoFarm = "自动农场",
-        EnableAutoFarm = "启用自动农场",
-        Speed = "飞行与速度",
-        CustomSpeed = "启用自定义速度",
-        SpeedSlider = "速度 (步行 / 车)",
-        Fly = "自由飞行",
-        Other = "其他",
-        AntiAfk = "防挂机",
-        Invis = "隐形 (本地)",
-        Confirm = "您确定要关闭脚本吗？",
-        Yes = "是",
-        No = "否",
-        AFInfo = "起点: 0, 124, -1537 | 坡道终点: 5, 101, -1205 | 终点: 8, 3, 2803",
-        EventShop = "活动商店与余额",
-        AutoBuyEvent = "自动购买活动物品",
-        TimerSelect = "活动计时器（秒）",
-        BalanceDisplay = "余额: 0 | 金币: 0",
-        PlayersLabel = "玩家 (ESP)",
-        ESP = "启用 ESP (高亮)",
-        TabMain = "主要",
-        TabShop = "商店",
-        TabVisuals = "视觉效果",
-        TabAnalysis = "分析",
-        TabPlayers = "玩家",
-        TabTeleports = "传送点",
-        CopyLogs = "已复制到剪贴板！",
-        Pets = "宠物",
-        AutoEquip = "自动装备最好",
-        CarMods = "汽车改装",
-        NoClip = "穿墙 (No-Clip)",
-        AutoFlip = "自动翻车恢复",
-        InfJump = "无限跳跃",
-        Locations = "地点",
-        TpCarShop = "汽车商店",
-        TpPaintShop = "喷漆店",
-        TpMiniParkour = "迷你跑酷",
-        TpEventShop = "活动商店",
-        CpuSaver = "CPU 节能模式 (禁用3D渲染)",
-        LowGraphics = "超低画质 (帧率提升)",
-        CustomPathing = "自定义路线",
-        RecordPath = "记录路线 (Rec)",
-        ClearPath = "清除路线",
-        UseCustomPath = "使用自定义路线",
-        PanicSettings = "菜单切换热键",
-        PanicBind = "菜单切换键"
-    }
-}
-local curLang = "RU"
-local function _t(k) return T[curLang] and T[curLang][k] or k end
-
+-- === UI SETUP ===
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MegaRamp_" .. tostring(math.random(1000,9999))
+ScreenGui.Name = "UniversalHack_" .. tostring(math.random(1000,9999))
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
-local langEvent = Instance.new("BindableEvent")
-
-local LangFrame = Instance.new("Frame")
-LangFrame.Size = UDim2.new(0, 300, 0, 200)
-LangFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
-LangFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-LangFrame.BorderSizePixel = 0
-LangFrame.Parent = ScreenGui
-Instance.new("UICorner", LangFrame).CornerRadius = UDim.new(0, 10)
-
-local LangTitle = Instance.new("TextLabel")
-LangTitle.Size = UDim2.new(1, 0, 0, 40)
-LangTitle.BackgroundTransparency = 1
-LangTitle.Text = "Select Language / Выберите язык / 选择语言"
-LangTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-LangTitle.Font = Enum.Font.GothamBold
-LangTitle.TextSize = 14
-LangTitle.Parent = LangFrame
-
-local langs = {
-    {code = "RU", name = "Русский", y = 50},
-    {code = "EN", name = "English", y = 95},
-    {code = "ZH", name = "中文", y = 140}
-}
-
-for _, l in ipairs(langs) do
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(0, 200, 0, 35)
-    b.Position = UDim2.new(0.5, -100, 0, l.y)
-    b.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-    b.Text = l.name
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
-    b.Font = Enum.Font.Gotham
-    b.TextSize = 14
-    b.Parent = LangFrame
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-    
-    connectSignal(b.MouseButton1Click, function()
-        curLang = l.code
-        langEvent:Fire()
-    end)
-end
-
-langEvent.Event:Wait()
-LangFrame:Destroy()
-
--- Show Loading Screen
-local LoadFrame = Instance.new("Frame")
-LoadFrame.Size = UDim2.new(0, 400, 0, 250)
-LoadFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
-LoadFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-LoadFrame.BorderSizePixel = 0
-LoadFrame.Parent = ScreenGui
-Instance.new("UICorner", LoadFrame).CornerRadius = UDim.new(0, 12)
-
-local ArcTitle = Instance.new("TextLabel")
-ArcTitle.Size = UDim2.new(1, 0, 0, 50)
-ArcTitle.Position = UDim2.new(0, 0, 0.5, -50)
-ArcTitle.BackgroundTransparency = 1
-ArcTitle.Text = "УНИВЕРСАЛЬНЫЙ СКРИПТ"
-ArcTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
-ArcTitle.Font = Enum.Font.GothamBlack
-ArcTitle.TextSize = 24
-ArcTitle.Parent = LoadFrame
-
-local LoadBarBG = Instance.new("Frame")
-LoadBarBG.Size = UDim2.new(0.8, 0, 0, 10)
-LoadBarBG.Position = UDim2.new(0.1, 0, 0.5, 20)
-LoadBarBG.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-LoadBarBG.Parent = LoadFrame
-Instance.new("UICorner", LoadBarBG).CornerRadius = UDim.new(1, 0)
-
-local LoadBarFill = Instance.new("Frame")
-LoadBarFill.Size = UDim2.new(0, 0, 1, 0)
-LoadBarFill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-LoadBarFill.Parent = LoadBarBG
-Instance.new("UICorner", LoadBarFill).CornerRadius = UDim.new(1, 0)
-
-local LoadText = Instance.new("TextLabel")
-LoadText.Size = UDim2.new(1, 0, 0, 30)
-LoadText.Position = UDim2.new(0, 0, 0.5, 40)
-LoadText.BackgroundTransparency = 1
-LoadText.Text = "Loading..."
-LoadText.TextColor3 = Color3.fromRGB(200, 200, 200)
-LoadText.Font = Enum.Font.Gotham
-LoadText.TextSize = 14
-LoadText.Parent = LoadFrame
-
-LoadBarFill:TweenSize(UDim2.new(1, 0, 1, 0), "Out", "Linear", 2, true)
-task.wait(2)
-LoadFrame:Destroy()
-
--- Window Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 500, 0, 480)
@@ -483,65 +182,6 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
-
-pcall(function()
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-    local oldIndex = mt.__index
-    local oldNewIndex = mt.__newindex
-    setreadonly(mt, false)
-
-    
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        if not checkcaller() then
-            if method == "Kick" or method == "kick" then
-                return nil
-            elseif method == "Teleport" or method == "TeleportToPlaceInstance" then
-                return nil
-            elseif method == "FireServer" or method == "InvokeServer" then
-                local name = tostring(self):lower()
-                if name:find("ban") or name:find("kick") or name:find("punish") or name:find("cheat") or name:find("log") or name:find("detect") or name:find("anticheat") or name:find("report") or name:find("crash") or name:find("error") or name:find("suspicious") or name:find("exploit") or name:find("admin") then
-                    return nil
-                end
-            end
-        end
-        return oldNamecall(self, ...)
-    end)
-    
-    mt.__index = newcclosure(function(self, key)
-        if not checkcaller() then
-            if key == "WalkSpeed" then return 16 end
-            if key == "JumpPower" then return 50 end
-            if key == "JumpHeight" then return 7.2 end
-            if key == "Transparency" and self:IsA("BasePart") then return 0 end
-        end
-        return oldIndex(self, key)
-    end)
-    
-    mt.__newindex = newcclosure(function(self, key, value)
-        if not checkcaller() then
-            if key == "WalkSpeed" or key == "JumpPower" or key == "JumpHeight" then return end
-        end
-        return oldNewIndex(self, key, value)
-    end)
-    
-    setreadonly(mt, true)
-
-
-    
-    local ScriptContext = game:GetService("ScriptContext")
-    local LogService = game:GetService("LogService")
-    
-    for _, conn in ipairs(getconnections(ScriptContext.Error)) do
-        conn:Disable()
-    end
-    for _, conn in ipairs(getconnections(LogService.MessageOut)) do
-        conn:Disable()
-    end
-
-    print("[MEGA RAMP LOG] God-Level Anti-Cheat bypass active")
-end)
 
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 10)
@@ -552,7 +192,6 @@ UIStroke.Color = Color3.fromRGB(50, 50, 60)
 UIStroke.Thickness = 2
 UIStroke.Parent = MainFrame
 
--- Topbar
 local Topbar = Instance.new("Frame")
 Topbar.Size = UDim2.new(1, 0, 0, 40)
 Topbar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -563,39 +202,13 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -170, 1, 0)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "УНИВЕРСАЛЬНЫЙ"
+Title.Text = "УНИВЕРСАЛЬНЫЙ СКРИПТ"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 18
+Title.TextSize = 16
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Topbar
 
-local FpsLabel = Instance.new("TextLabel")
-FpsLabel.Size = UDim2.new(0, 80, 1, 0)
-FpsLabel.Position = UDim2.new(1, -165, 0, 0)
-FpsLabel.BackgroundTransparency = 1
-FpsLabel.Text = "FPS: ..."
-FpsLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
-FpsLabel.Font = Enum.Font.GothamBold
-FpsLabel.TextSize = 14
-FpsLabel.TextXAlignment = Enum.TextXAlignment.Right
-FpsLabel.Parent = Topbar
-
-local lastTick = tick()
-local frames = 0
-connectSignal(RunService.RenderStepped, function()
-    frames = frames + 1
-    local t = tick()
-    if t - lastTick >= 1 then
-        if ScreenGui and ScreenGui.Parent then
-            FpsLabel.Text = "FPS: " .. frames
-        end
-        frames = 0
-        lastTick = t
-    end
-end)
-
--- Window Controls (Minimize & Close)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
 MinimizeBtn.Position = UDim2.new(1, -75, 0, 5)
@@ -618,7 +231,6 @@ CloseBtn.TextSize = 16
 CloseBtn.Parent = Topbar
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
--- Dragging Logic
 local dragging, dragInput, dragStart, startPos
 connectSignal(Topbar.InputBegan, function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -648,19 +260,24 @@ connectSignal(MinimizeBtn.MouseButton1Click, function()
     MainFrame.Size = isMinimized and UDim2.new(0, 500, 0, 40) or UDim2.new(0, 500, 0, 480)
 end)
 
--- Scroll Container
+connectSignal(CloseBtn.MouseButton1Click, function()
+    if _G.MegaRampConnections then
+        for _, conn in ipairs(_G.MegaRampConnections) do
+            pcall(function() if conn and conn.Connected then conn:Disconnect() end end)
+        end
+        _G.MegaRampConnections = {}
+    end
+    if ScreenGui then ScreenGui:Destroy() end
+end)
+
 local Container = Instance.new("ScrollingFrame")
-Container.Size = UDim2.new(1, -30, 1, -55)
-Container.Position = UDim2.new(0, 15, 0, 45)
+Container.Size = UDim2.new(1, -30, 1, -95)
+Container.Position = UDim2.new(0, 15, 0, 85)
 Container.BackgroundTransparency = 1
 Container.ScrollBarThickness = 5
 Container.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Container.CanvasSize = UDim2.new(0, 0, 0, 0)
 Container.Parent = MainFrame
-
-Container.Position = UDim2.new(0, 15, 0, 85)
-Container.Size = UDim2.new(1, -30, 1, -95)
-
 
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(1, 0, 0, 40)
@@ -723,7 +340,6 @@ local function createTab(name)
         TabBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
         TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         
-        -- Update CanvasSize
         task.wait(0.1)
         Container.CanvasSize = UDim2.new(0, 0, 0, ContentLayout.AbsoluteContentSize.Y + 20)
     end)
@@ -734,100 +350,9 @@ local function createTab(name)
         TabBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
         TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     end
-
     return TabContent
 end
 
-
--- Confirmation Dialog
-local ConfirmFrame = Instance.new("Frame")
-ConfirmFrame.Size = UDim2.new(1, 0, 1, 0)
-ConfirmFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-ConfirmFrame.BackgroundTransparency = 0.5
-ConfirmFrame.Visible = false
-ConfirmFrame.ZIndex = 10
-ConfirmFrame.Parent = MainFrame
-
-local ConfirmBox = Instance.new("Frame")
-ConfirmBox.Size = UDim2.new(0, 260, 0, 130)
-ConfirmBox.Position = UDim2.new(0.5, -130, 0.5, -65)
-ConfirmBox.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-ConfirmBox.ZIndex = 11
-ConfirmBox.Parent = ConfirmFrame
-Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 8)
-
-local ConfirmLabel = Instance.new("TextLabel")
-ConfirmLabel.Size = UDim2.new(1, 0, 0, 50)
-ConfirmLabel.Position = UDim2.new(0, 0, 0, 15)
-ConfirmLabel.BackgroundTransparency = 1
-ConfirmLabel.Text = _t("Confirm")
-ConfirmLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-ConfirmLabel.Font = Enum.Font.Gotham
-ConfirmLabel.TextSize = 14
-ConfirmLabel.TextWrapped = true
-ConfirmLabel.ZIndex = 11
-ConfirmLabel.Parent = ConfirmBox
-
-local YesBtn = Instance.new("TextButton")
-YesBtn.Size = UDim2.new(0, 90, 0, 35)
-YesBtn.Position = UDim2.new(0, 30, 0, 75)
-YesBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-YesBtn.Text = _t("Yes")
-YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-YesBtn.Font = Enum.Font.GothamBold
-YesBtn.TextSize = 14
-YesBtn.ZIndex = 11
-YesBtn.Parent = ConfirmBox
-Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 6)
-
-local NoBtn = Instance.new("TextButton")
-NoBtn.Size = UDim2.new(0, 90, 0, 35)
-NoBtn.Position = UDim2.new(1, -120, 0, 75)
-NoBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-NoBtn.Text = _t("No")
-NoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-NoBtn.Font = Enum.Font.GothamBold
-NoBtn.TextSize = 14
-NoBtn.ZIndex = 11
-NoBtn.Parent = ConfirmBox
-Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 6)
-
-local function CleanupScript()
-    if _G.MegaRampConnections then
-        for _, conn in ipairs(_G.MegaRampConnections) do
-            pcall(function() if conn and conn.Connected then conn:Disconnect() end end)
-        end
-        _G.MegaRampConnections = {}
-    end
-    pcall(function() RunService:Set3dRenderingEnabled(true) end)
-    pcall(function() if setfpscap then setfpscap(0) end end)
-    pcall(function()
-        settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
-        Workspace.Lighting.GlobalShadows = true
-    end)
-    pcall(function()
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = 16
-            if char.Humanoid.SeatPart and char.Humanoid.SeatPart:IsA("VehicleSeat") then
-                char.Humanoid.SeatPart.MaxSpeed = 50
-            end
-        end
-    end)
-    if ScreenGui then ScreenGui:Destroy() end
-end
-
-connectSignal(CloseBtn.MouseButton1Click, function()
-    if isMinimized then
-        CleanupScript()
-    else
-        ConfirmFrame.Visible = true
-    end
-end)
-connectSignal(NoBtn.MouseButton1Click, function() ConfirmFrame.Visible = false end)
-connectSignal(YesBtn.MouseButton1Click, function() CleanupScript() end)
-
--- UI Helpers
 local function createLabel(text, parent)
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, 0, 0, 25)
@@ -837,7 +362,7 @@ local function createLabel(text, parent)
     Label.TextSize = 14
     Label.Font = Enum.Font.GothamBold
     Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = parent or Container
+    Label.Parent = parent
     return Label
 end
 
@@ -846,22 +371,8 @@ local function createToggle(text, parent)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, 0, 0, 40)
     Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    Frame.Parent = parent or Container
+    Frame.Parent = parent
     Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
-
-    connectSignal(Frame.MouseEnter, function()
-        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
-    end)
-    connectSignal(Frame.MouseLeave, function()
-        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
-    end)
-
-    connectSignal(Frame.MouseEnter, function()
-        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
-    end)
-    connectSignal(Frame.MouseLeave, function()
-        TweenService:Create(Frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
-    end)
 
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -60, 1, 0)
@@ -907,7 +418,7 @@ local function createSlider(text, min, max, default, parent)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, 0, 0, 60)
     Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    Frame.Parent = parent or Container
+    Frame.Parent = parent
     Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
 
     local Label = Instance.new("TextLabel")
@@ -963,16 +474,14 @@ local function createSlider(text, min, max, default, parent)
     return function() return value end
 end
 
-
--- === CONTENT ===
-local MainTab = createTab(_t("TabMain") or "MAIN")
-local ShopTab = createTab(_t("TabShop") or "SHOP")
-local TeleportsTab = createTab(_t("TabTeleports") or "TELEPORTS")
-local VisualsTab = createTab(_t("TabVisuals") or "VISUALS")
-local GameInfoTab = createTab(_t("TabAnalysis") or "ANALYSIS")
+-- === TABS & LOGIC ===
+local MainTab = createTab("MAIN")
+local AimbotTab = createTab("AIMBOT")
+local VisualsTab = createTab("VISUALS")
+local TeleportsTab = createTab("TELEPORTS")
 
 -- PROFILE
-createLabel(_t("Profile"), MainTab)
+createLabel("PLAYER PROFILE", MainTab)
 local ProfileFrame = Instance.new("Frame")
 ProfileFrame.Size = UDim2.new(1, 0, 0, 70)
 ProfileFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -1009,79 +518,22 @@ CoordLabel.TextSize = 14
 CoordLabel.TextXAlignment = Enum.TextXAlignment.Left
 CoordLabel.Parent = ProfileFrame
 
-local CopyCoordsBtn = Instance.new("TextButton")
-CopyCoordsBtn.Size = UDim2.new(0, 40, 0, 40)
-CopyCoordsBtn.Position = UDim2.new(1, -50, 0, 15)
-CopyCoordsBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-CopyCoordsBtn.Text = "📋"
-CopyCoordsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CopyCoordsBtn.TextSize = 18
-CopyCoordsBtn.Parent = ProfileFrame
-Instance.new("UICorner", CopyCoordsBtn).CornerRadius = UDim.new(0, 6)
-
 connectSignal(RunService.RenderStepped, function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local pos = char.HumanoidRootPart.Position
         CoordLabel.Text = string.format("X: %d, Y: %d, Z: %d", math.floor(pos.X), math.floor(pos.Y), math.floor(pos.Z))
-    else
-        CoordLabel.Text = _t("Coords")
     end
 end)
-
-connectSignal(CopyCoordsBtn.MouseButton1Click, function()
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local pos = char.HumanoidRootPart.Position
-        local str = string.format("%d, %d, %d", math.floor(pos.X), math.floor(pos.Y), math.floor(pos.Z))
-        if setclipboard then
-            setclipboard(str)
-            CopyCoordsBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-            task.delay(1, function() CopyCoordsBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55) end)
-        end
-    end
-end)
-
 
 -- FLY & SPEED
-createLabel(_t("Speed") or "SPEED & FLY", MainTab)
-local isCustomSpeed = createToggle(_t("CustomSpeed") or "Enable Custom Speed", MainTab)
-local getSpeed = createSlider(_t("SpeedSlider") or "Walk/Car Speed", 16, 300, 50, MainTab)
-local isFlyEnabled = createToggle(_t("Fly") or "Free Fly", MainTab)
-
-
--- PETS
-createLabel(_t("Pets") or "PETS", ShopTab)
-local isAutoEquipEnabled = createToggle(_t("AutoEquip") or "Auto-Equip", ShopTab)
-
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(2)
-        if isAutoEquipEnabled() then
-            pcall(function()
-                local rs = game:GetService("ReplicatedStorage")
-                local equipRemote = rs:FindFirstChild("EquipBestInventory", true)
-                if equipRemote and equipRemote:IsA("RemoteEvent") then
-                    equipRemote:FireServer()
-                end
-            end)
-        end
-    end
-end)
-
--- EVENT SHOP & BALANCE
-
-
-
-
-
-
-
-
-
+createLabel("SPEED & FLY", MainTab)
+local isCustomSpeed = createToggle("Enable Custom Speed", MainTab)
+local getSpeed = createSlider("Speed", 16, 300, 50, MainTab)
+local isFlyEnabled = createToggle("Free Fly", MainTab)
 
 local flying = false
-local flySpeed = 50
+local wasWalkSpeedChanged = false
 
 connectSignal(RunService.RenderStepped, function(deltaTime)
     local char = LocalPlayer.Character
@@ -1092,400 +544,143 @@ connectSignal(RunService.RenderStepped, function(deltaTime)
     
     if not humanoid or not root then return end
 
-    -- Custom Speed (CFrame Based to avoid Anti-Cheat WalkSpeed checks)
     if isCustomSpeed() and not isFlyEnabled() then
-        if humanoid.MoveDirection.Magnitude > 0 then
-            local speedDiff = getSpeed() - humanoid.WalkSpeed
-            if speedDiff > 0 then
-                local displacement = humanoid.MoveDirection * (speedDiff * deltaTime)
-                -- Apply displacement
-                if root:IsA("BasePart") then
-                    root.CFrame = root.CFrame + displacement
-                end
-            end
+        humanoid.WalkSpeed = getSpeed()
+        wasWalkSpeedChanged = true
+        if humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
+            humanoid.SeatPart.MaxSpeed = getSpeed()
+        end
+    elseif wasWalkSpeedChanged then
+        humanoid.WalkSpeed = 16
+        wasWalkSpeedChanged = false
+        if humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
+            humanoid.SeatPart.MaxSpeed = 50
         end
     end
 
-    -- Fly (CFrame Based to avoid BodyMovers Anti-Cheat checks)
     if isFlyEnabled() then
         if not flying then
             flying = true
-            if root:IsA("BasePart") then
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            if not root:FindFirstChild("FlyBV") then
+                local bv = Instance.new("BodyVelocity")
+                bv.Name = "FlyBV"
+                bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                bv.Velocity = Vector3.new(0,0,0)
+                bv.Parent = root
             end
         end
         
-        -- Freeze fall
-        if root:IsA("BasePart") then
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        end
-        
-        local camera = Workspace.CurrentCamera
-        local moveDir = Vector3.new(0,0,0)
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.lookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.lookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.rightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.rightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
-        
-        local currentSpeed = isCustomSpeed() and getSpeed() or 50
-        
-        if moveDir.Magnitude > 0 then
-            moveDir = moveDir.Unit
-            root.CFrame = root.CFrame + (moveDir * currentSpeed * deltaTime)
+        local bv = root:FindFirstChild("FlyBV")
+        if bv then
+            local moveDir = Vector3.new(0,0,0)
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.lookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.lookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.rightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.rightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+            
+            local currentSpeed = isCustomSpeed() and getSpeed() or 50
+            if moveDir.Magnitude > 0 then
+                bv.Velocity = moveDir.Unit * currentSpeed
+            else
+                bv.Velocity = Vector3.new(0,0,0)
+            end
         end
     else
         if flying then
             flying = false
+            local bv = root:FindFirstChild("FlyBV")
+            if bv then bv:Destroy() end
         end
     end
 end)
 
--- GRAPHICS & CPU OPTIMIZATION
+-- AIMBOT
+createLabel("AIMBOT SETTINGS (Q TO AIM)", AimbotTab)
+local isAimbotEnabled = createToggle("Enable Aimbot", AimbotTab)
+local aimbotTarget = nil
 
+local function getClosestPlayerToCursor()
+    local closestDist = math.huge
+    local closestPlayer = nil
+    local mouse = LocalPlayer:GetMouse()
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
 
-
-
-
--- OTHER & MULTI-LAYER ANTI-AFK
-
-createLabel(_t("PanicSettings") or "MENU TOGGLE HOTKEY", MainTab)
-
-local currentToggleKey = Enum.KeyCode.RightShift
-local isBindingKey = false
-
-local bindFrame = Instance.new("Frame")
-bindFrame.Size = UDim2.new(1, 0, 0, 40)
-bindFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-bindFrame.Parent = MainTab
-Instance.new("UICorner", bindFrame).CornerRadius = UDim.new(0, 6)
-
-local bindLabel = Instance.new("TextLabel")
-bindLabel.Size = UDim2.new(1, -120, 1, 0)
-bindLabel.Position = UDim2.new(0, 10, 0, 0)
-bindLabel.BackgroundTransparency = 1
-bindLabel.Text = _t("PanicBind") or "Menu Toggle Key"
-bindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-bindLabel.Font = Enum.Font.Gotham
-bindLabel.TextSize = 14
-bindLabel.TextXAlignment = Enum.TextXAlignment.Left
-bindLabel.Parent = bindFrame
-
-local bindButton = Instance.new("TextButton")
-bindButton.Size = UDim2.new(0, 100, 0, 26)
-bindButton.Position = UDim2.new(1, -110, 0.5, -13)
-bindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-bindButton.Text = currentToggleKey.Name
-bindButton.TextColor3 = Color3.fromRGB(0, 255, 150)
-bindButton.Font = Enum.Font.GothamBold
-bindButton.TextSize = 12
-bindButton.Parent = bindFrame
-Instance.new("UICorner", bindButton).CornerRadius = UDim.new(0, 4)
-
-connectSignal(bindButton.MouseButton1Click, function()
-    isBindingKey = true
-    bindButton.Text = "..."
-    bindButton.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-end)
-
-local isMenuVisible = true
-connectSignal(UserInputService.InputBegan, function(input, gpe)
-    if isBindingKey and input.UserInputType == Enum.UserInputType.Keyboard then
-        currentToggleKey = input.KeyCode
-        bindButton.Text = currentToggleKey.Name
-        bindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-        isBindingKey = false
-        return
-    end
-    
-    if not gpe and input.KeyCode == currentToggleKey then
-        isMenuVisible = not isMenuVisible
-        MainFrame.Visible = isMenuVisible
-    end
-end)
-
-
-createLabel("CHAT BYPASS (Send Message)", MainTab)
-
-local chatFrame = Instance.new("Frame")
-chatFrame.Size = UDim2.new(1, 0, 0, 40)
-chatFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-chatFrame.Parent = MainTab
-Instance.new("UICorner", chatFrame).CornerRadius = UDim.new(0, 6)
-
-local chatInput = Instance.new("TextBox")
-chatInput.Size = UDim2.new(1, -70, 1, -10)
-chatInput.Position = UDim2.new(0, 5, 0, 5)
-chatInput.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-chatInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-chatInput.PlaceholderText = "Enter message here..."
-chatInput.Text = ""
-chatInput.Font = Enum.Font.Gotham
-chatInput.TextSize = 14
-chatInput.Parent = chatFrame
-Instance.new("UICorner", chatInput).CornerRadius = UDim.new(0, 4)
-
-local sendBtn = Instance.new("TextButton")
-sendBtn.Size = UDim2.new(0, 55, 1, -10)
-sendBtn.Position = UDim2.new(1, -60, 0, 5)
-sendBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
-sendBtn.Text = "Send"
-sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-sendBtn.Font = Enum.Font.GothamBold
-sendBtn.TextSize = 12
-sendBtn.Parent = chatFrame
-Instance.new("UICorner", sendBtn).CornerRadius = UDim.new(0, 4)
-
-connectSignal(sendBtn.MouseButton1Click, function()
-    local msg = chatInput.Text
-    if msg and msg ~= "" then
-        pcall(function()
-            local tcs = game:GetService("TextChatService")
-            if tcs and tcs.ChatVersion == Enum.ChatVersion.TextChatService then
-                local channel = tcs.TextChannels:FindFirstChild("RBXGeneral")
-                if channel then
-                    channel:SendAsync(msg)
-                end
-            else
-                local rs = game:GetService("ReplicatedStorage")
-                local chatEvents = rs:FindFirstChild("DefaultChatSystemChatEvents")
-                if chatEvents then
-                    local sayMessage = chatEvents:FindFirstChild("SayMessageRequest")
-                    if sayMessage then
-                        sayMessage:FireServer(msg, "All")
-                    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
+            local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
+            if onScreen then
+                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closestPlayer = p
                 end
             end
-        end)
-        chatInput.Text = ""
-    end
-end)
-
-createLabel(_t("Other"), MainTab)
-
-local isAntiAfkEnabled = createToggle(_t("AntiAfk"), MainTab)
-
--- Disable default Idled connections if getconnections available
-pcall(function()
-    if getconnections then
-        for _, conn in ipairs(getconnections(LocalPlayer.Idled)) do
-            if conn.Disable then conn:Disable() end
         end
     end
-end)
-
--- Block LocalPlayer:Kick() calls directly
-pcall(function()
-    if hookfunction then
-        local oldKick
-        oldKick = hookfunction(LocalPlayer.Kick, function(self, ...)
-            return nil
-        end)
-    else
-        LocalPlayer.Kick = function() return nil end
-    end
-end)
-
-connectSignal(LocalPlayer.Idled, function()
-    if isAntiAfkEnabled() then
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new(0,0))
-            VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-            task.wait(0.5)
-            VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-        end)
-    end
-end)
-
--- Periodic active Anti-AFK background loop (every 30s)
-task.spawn(function()
-    while ScreenGui and ScreenGui.Parent do
-        task.wait(30)
-        if isAntiAfkEnabled() then
-            pcall(function()
-                VirtualUser:CaptureController()
-                VirtualUser:ClickButton2(Vector2.new(0,0))
-                if VirtualInputManager then
-                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.RightControl, false, game)
-                    task.wait(0.05)
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.RightControl, false, game)
-                end
-                VirtualUser:TypeKey("0")
-            end)
-        end
-    end
-end)
-
-
-
-createLabel("Game Analysis & Logic", GameInfoTab)
-
-local AnalysisOutput = Instance.new("ScrollingFrame")
-AnalysisOutput.Size = UDim2.new(1, -10, 0, 150)
-AnalysisOutput.Position = UDim2.new(0, 5, 0, 30)
-AnalysisOutput.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-AnalysisOutput.ScrollBarThickness = 4
-AnalysisOutput.Parent = GameInfoTab
-Instance.new("UICorner", AnalysisOutput).CornerRadius = UDim.new(0, 6)
-
-local AnalysisText = Instance.new("TextLabel")
-AnalysisText.Size = UDim2.new(1, -10, 1, -10)
-AnalysisText.Position = UDim2.new(0, 5, 0, 5)
-AnalysisText.BackgroundTransparency = 1
-AnalysisText.Text = "Logs will appear here..."
-AnalysisText.TextColor3 = Color3.fromRGB(200, 200, 200)
-AnalysisText.Font = Enum.Font.Code
-AnalysisText.TextSize = 12
-AnalysisText.TextXAlignment = Enum.TextXAlignment.Left
-AnalysisText.TextYAlignment = Enum.TextYAlignment.Top
-AnalysisText.TextWrapped = true
-AnalysisText.Parent = AnalysisOutput
-
-local btnScan = Instance.new("TextButton")
-btnScan.Position = UDim2.new(0, 0, 0, 190)
-btnScan.Size = UDim2.new(1, 0, 0, 35)
-btnScan.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
-btnScan.Text = "Start Full Analysis (Prints to F9 Console)"
-btnScan.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnScan.Font = Enum.Font.GothamBold
-btnScan.TextSize = 14
-btnScan.Parent = GameInfoTab
-Instance.new("UICorner", btnScan).CornerRadius = UDim.new(0, 6)
-
-local btnStartRecord = Instance.new("TextButton")
-btnStartRecord.Position = UDim2.new(0, 0, 0, 235)
-btnStartRecord.Size = UDim2.new(0.5, -5, 0, 35)
-btnStartRecord.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-btnStartRecord.Text = "Start Recording"
-btnStartRecord.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnStartRecord.Font = Enum.Font.GothamBold
-btnStartRecord.TextSize = 14
-btnStartRecord.Parent = GameInfoTab
-Instance.new("UICorner", btnStartRecord).CornerRadius = UDim.new(0, 6)
-
-local btnStopRecord = Instance.new("TextButton")
-btnStopRecord.Position = UDim2.new(0.5, 5, 0, 235)
-btnStopRecord.Size = UDim2.new(0.5, -5, 0, 35)
-btnStopRecord.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-btnStopRecord.Text = "Stop & Save"
-btnStopRecord.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnStopRecord.Font = Enum.Font.GothamBold
-btnStopRecord.TextSize = 14
-btnStopRecord.Parent = GameInfoTab
-Instance.new("UICorner", btnStopRecord).CornerRadius = UDim.new(0, 6)
+    return closestPlayer
+end
 
 connectSignal(UserInputService.InputBegan, function(input, gpe)
-    if _G.ActionRecorder and _G.ActionRecorder.Recording then
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            table.insert(_G.ActionRecorder.Logs, string.format("[%s] KeyPressed: %s", os.date("%X"), tostring(input.KeyCode.Name)))
-        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-            table.insert(_G.ActionRecorder.Logs, string.format("[%s] MouseClick: %s", os.date("%X"), tostring(input.Position)))
-        end
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.Q and isAimbotEnabled() then
+        aimbotTarget = getClosestPlayerToCursor()
     end
 end)
 
-connectSignal(btnStartRecord.MouseButton1Click, function()
-    _G.ActionRecorder.Recording = true
-    _G.ActionRecorder.Logs = {}
-    table.insert(_G.ActionRecorder.Logs, "=== RECORDING STARTED ===")
-    
-    AnalysisText.Text = "Recording started... perform your actions in game."
-    btnStartRecord.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-    btnStartRecord.Text = "Recording..."
+connectSignal(UserInputService.InputEnded, function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.Q then
+        aimbotTarget = nil
+    end
 end)
 
-connectSignal(btnStopRecord.MouseButton1Click, function()
-    if not _G.ActionRecorder.Recording then return end
-    _G.ActionRecorder.Recording = false
-    table.insert(_G.ActionRecorder.Logs, "=== RECORDING STOPPED ===")
-    
-    local logData = table.concat(_G.ActionRecorder.Logs, "\n")
-    AnalysisText.Text = logData
-    AnalysisText.Size = UDim2.new(1, -10, 0, math.max(1000, #_G.ActionRecorder.Logs * 15))
-    AnalysisOutput.CanvasSize = UDim2.new(0, 0, 0, math.max(1000, #_G.ActionRecorder.Logs * 15))
-    
-    btnStartRecord.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-    btnStartRecord.Text = "Start Recording"
-    
-    if writefile then
-        local fileName = "ActionLogs_" .. tostring(math.floor(tick())) .. ".txt"
-        pcall(function()
-            writefile(fileName, logData)
-        end)
-        AnalysisText.Text = "Saved to Workspace folder as " .. fileName .. "\n\n" .. logData
+connectSignal(RunService.RenderStepped, function()
+    if isAimbotEnabled() and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+        local headPos = aimbotTarget.Character.Head.Position
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, headPos)
+    end
+end)
+
+-- VISUALS
+createLabel("PLAYERS (ESP)", VisualsTab)
+local isESPEnabled = createToggle("Enable ESP (Highlight)", VisualsTab)
+local espHighlights = {}
+
+connectSignal(RunService.RenderStepped, function()
+    if isESPEnabled() then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                if not espHighlights[player] then
+                    local hl = Instance.new("Highlight")
+                    hl.FillColor = Color3.fromRGB(255, 0, 0)
+                    hl.FillTransparency = 0.5
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.Parent = player.Character
+                    espHighlights[player] = hl
+                elseif espHighlights[player].Parent ~= player.Character then
+                    espHighlights[player].Parent = player.Character
+                end
+            end
+        end
     else
-        if setclipboard then
-            setclipboard(logData)
-            AnalysisText.Text = "Copied to clipboard! (writefile not supported)\n\n" .. logData
+        for player, hl in pairs(espHighlights) do
+            if hl and hl.Parent then hl:Destroy() end
         end
+        table.clear(espHighlights)
     end
 end)
 
-connectSignal(btnScan.MouseButton1Click, function()
-    local logData = "=== STARTING FULL GAME ANALYSIS ===\n"
-    logData = logData .. "1. Workspace Vehicles:\n"
-    local vehicles = 0
-    for _, v in ipairs(Workspace:GetDescendants()) do
-        if v:IsA("VehicleSeat") then
-            vehicles = vehicles + 1
-            local model = v:FindFirstAncestorWhichIsA("Model")
-            logData = logData .. " - Vehicle found: " .. (model and model.Name or "Unknown") .. " at " .. tostring(v.Position) .. "\n"
-        end
-    end
-    logData = logData .. "Total vehicles detected: " .. vehicles .. "\n\n"
-    
-    logData = logData .. "2. Remotes in ReplicatedStorage:\n"
-    for _, v in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            logData = logData .. " - Remote: " .. v.Name .. " Type: " .. v.ClassName .. "\n"
-        end
-    end
-    logData = logData .. "\n"
-    
-    logData = logData .. "3. Player GUI Buttons (Shop, Events):\n"
-    for _, obj in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-        if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-            local pName = obj.Parent and obj.Parent.Name or ""
-            local txt = obj:IsA("TextButton") and obj.Text or ""
-            logData = logData .. " - Button: " .. obj.Name .. " (Text: " .. tostring(txt) .. ") inside " .. pName .. "\n"
-        end
-    end
-    logData = logData .. "\n"
-    
-    logData = logData .. "4. Case/Chest detection in Workspace:\n"
-    local cases = 0
-    for _, v in ipairs(Workspace:GetDescendants()) do
-        if v:IsA("BasePart") and (v.Name:lower():find("case") or v.Name:lower():find("chest") or v.Name:lower():find("box") or v.Name:lower():find("multiplier")) then
-            cases = cases + 1
-            logData = logData .. " - Case/Chest/Multiplier found: " .. v.Name .. " at " .. tostring(v.Position) .. "\n"
-        end
-    end
-    logData = logData .. "Total Cases detected: " .. cases .. "\n"
-    logData = logData .. "=== ANALYSIS COMPLETE ==="
-    
-    print(logData)
-    AnalysisText.Text = logData
-    AnalysisText.Size = UDim2.new(1, -10, 0, 1000) -- Expand text label
-    AnalysisOutput.CanvasSize = UDim2.new(0, 0, 0, 1000) -- Expand scroll
-    
-    if setclipboard then
-        setclipboard(logData)
-        local oldText = btnScan.Text
-        btnScan.Text = _t("CopyLogs") or "Copied!"
-        btnScan.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        task.delay(2, function()
-            btnScan.Text = oldText
-            btnScan.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
-        end)
+connectSignal(Players.PlayerRemoving, function(player)
+    if espHighlights[player] then
+        espHighlights[player]:Destroy()
+        espHighlights[player] = nil
     end
 end)
 
-createLabel("Server Players (Teleport)", TeleportsTab)
-
+-- TELEPORTS
+createLabel("PLAYERS TELEPORT", TeleportsTab)
 local PlayerListContainer = Instance.new("Frame")
 PlayerListContainer.Size = UDim2.new(1, 0, 0, 250)
 PlayerListContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -1519,17 +714,9 @@ local function refreshPlayerList()
             pFrame.Parent = PlayerScroll
             Instance.new("UICorner", pFrame).CornerRadius = UDim.new(0, 4)
             
-            local pAvatar = Instance.new("ImageLabel")
-            pAvatar.Size = UDim2.new(0, 25, 0, 25)
-            pAvatar.Position = UDim2.new(0, 5, 0, 5)
-            pAvatar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-            pAvatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. p.UserId .. "&w=150&h=150"
-            pAvatar.Parent = pFrame
-            Instance.new("UICorner", pAvatar).CornerRadius = UDim.new(1, 0)
-            
             local pName = Instance.new("TextLabel")
             pName.Size = UDim2.new(1, -100, 1, 0)
-            pName.Position = UDim2.new(0, 40, 0, 0)
+            pName.Position = UDim2.new(0, 10, 0, 0)
             pName.BackgroundTransparency = 1
             pName.Text = p.DisplayName .. " (@" .. p.Name .. ")"
             pName.TextColor3 = Color3.fromRGB(220, 220, 220)
@@ -1576,57 +763,56 @@ connectSignal(Players.PlayerAdded, refreshPlayerList)
 connectSignal(Players.PlayerRemoving, refreshPlayerList)
 refreshPlayerList()
 
--- TELEPORTS
-createLabel(_t("Locations") or "LOCATIONS", TeleportsTab)
+-- MENU TOGGLE
+createLabel("MENU TOGGLE HOTKEY", MainTab)
+local currentToggleKey = Enum.KeyCode.RightShift
+local isBindingKey = false
 
-local function teleportToLocation(name)
-    local target = nil
-    for _, v in ipairs(Workspace:GetDescendants()) do
-        if v:IsA("Model") or v:IsA("BasePart") then
-            if v.Name:lower():find(name:lower()) then
-                target = v
-                break
-            end
-        end
-    end
-    if target then
-        local pos = target:IsA("Model") and (target.PrimaryPart and target.PrimaryPart.Position or target:GetModelCFrame().p) or target.Position
-        teleportTo(pos + Vector3.new(0, 5, 0), false)
-    end
-end
+local bindFrame = Instance.new("Frame")
+bindFrame.Size = UDim2.new(1, 0, 0, 40)
+bindFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+bindFrame.Parent = MainTab
+Instance.new("UICorner", bindFrame).CornerRadius = UDim.new(0, 6)
 
-local function createTeleportBtn(text, parent, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 35)
-    btn.Position = UDim2.new(0, 10, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    
-    local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 0, 45)
-    f.BackgroundTransparency = 1
-    f.Parent = parent
-    
-    btn.Parent = f
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    
-    connectSignal(btn.MouseButton1Click, callback)
-    return btn
-end
+local bindLabel = Instance.new("TextLabel")
+bindLabel.Size = UDim2.new(1, -120, 1, 0)
+bindLabel.Position = UDim2.new(0, 10, 0, 0)
+bindLabel.BackgroundTransparency = 1
+bindLabel.Text = "Menu Toggle Key"
+bindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+bindLabel.Font = Enum.Font.Gotham
+bindLabel.TextSize = 14
+bindLabel.TextXAlignment = Enum.TextXAlignment.Left
+bindLabel.Parent = bindFrame
 
-createTeleportBtn(_t("TpCarShop") or "Car Shop", TeleportsTab, function()
-    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("OpenCarShop", true):FireServer() end)
-    teleportToLocation("carshop")
+local bindButton = Instance.new("TextButton")
+bindButton.Size = UDim2.new(0, 100, 0, 26)
+bindButton.Position = UDim2.new(1, -110, 0.5, -13)
+bindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+bindButton.Text = currentToggleKey.Name
+bindButton.TextColor3 = Color3.fromRGB(0, 255, 150)
+bindButton.Font = Enum.Font.GothamBold
+bindButton.TextSize = 12
+bindButton.Parent = bindFrame
+Instance.new("UICorner", bindButton).CornerRadius = UDim.new(0, 4)
+
+connectSignal(bindButton.MouseButton1Click, function()
+    isBindingKey = true
+    bindButton.Text = "..."
+    bindButton.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
 end)
 
-createTeleportBtn(_t("TpEventShop") or "Event Shop", TeleportsTab, function()
-    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("OpenEventShop", true):FireServer() end)
-    teleportToLocation("eventshop")
-end)
-createTeleportBtn(_t("TpMiniParkour") or "Mini Parkour", TeleportsTab, function()
-    pcall(function() game:GetService("ReplicatedStorage"):FindFirstChild("MiniParkourEvent", true):FireServer() end)
-    teleportToLocation("miniparkour")
+local isMenuVisible = true
+connectSignal(UserInputService.InputBegan, function(input, gpe)
+    if isBindingKey and input.UserInputType == Enum.UserInputType.Keyboard then
+        currentToggleKey = input.KeyCode
+        bindButton.Text = currentToggleKey.Name
+        bindButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+        isBindingKey = false
+        return
+    end
+    if not gpe and input.KeyCode == currentToggleKey then
+        isMenuVisible = not isMenuVisible
+        MainFrame.Visible = isMenuVisible
+    end
 end)
