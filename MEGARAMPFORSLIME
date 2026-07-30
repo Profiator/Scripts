@@ -453,8 +453,21 @@ end)
 -- FLY & SPEED
 createLabel("СКОРОСТЬ & ПОЛЕТ (ОБХОД АНТИЧИТА)", MainTab)
 local isCustomSpeed = createToggle("Включить скорость", MainTab)
-local getSpeed = createSlider("Скорость", 16, 300, 50, MainTab)
+local getSpeed = createSlider("Скорость", 16, 1000, 100, MainTab)
 local isFlyEnabled = createToggle("Свободный полет", MainTab)
+local isInfJump = createToggle("Бесконечный прыжок", MainTab)
+
+connectSignal(UserInputService.JumpRequest, function()
+    if isInfJump() then
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end
+end)
 
 local speedBindKey = nil
 local isBindingSpeed = false
@@ -700,17 +713,8 @@ connectSignal(RunService.RenderStepped, function()
     if isAimbotEnabled() and hasWeapon and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and UserInputService:IsKeyDown(Enum.KeyCode.Q) then
         aimbotActive = true
         local headPos = aimbotTarget.Character.Head.Position
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, headPos)
-        
-        -- Force the character to face the target so weapons shoot correctly in 3rd/1st person
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            local hrp = char.HumanoidRootPart
-            local lookVector = (Vector3.new(headPos.X, hrp.Position.Y, headPos.Z) - hrp.Position).Unit
-            if lookVector.Magnitude > 0 then
-                hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + lookVector)
-            end
-        end
+        local targetCFrame = CFrame.new(Camera.CFrame.Position, headPos)
+        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.5)
     else
         aimbotActive = false
     end
@@ -845,6 +849,15 @@ local function teleportTo(targetPos, keepVehicle)
     local root = getCharRoot(keepVehicle)
     if not root then return end
     
+    local char = LocalPlayer.Character
+    local humanoid = char and char:FindFirstChild("Humanoid")
+    if humanoid then
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+            humanoid:ChangeState(Enum.HumanoidStateType.PlatformStanding)
+        end)
+    end
+    
     local model = root:FindFirstAncestorWhichIsA("Model") or root.Parent
     local startPos = root.Position
     local dist = (startPos - targetPos).Magnitude
@@ -852,47 +865,40 @@ local function teleportTo(targetPos, keepVehicle)
     local finalPos = targetPos + Vector3.new(0, 5, 0)
     
     -- If very close, just jump there instantly
-    if dist < 20 then
+    if dist < 50 then
         model:PivotTo(CFrame.new(finalPos))
+        if humanoid then pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) end) end
         return
     end
     
-    -- Anti-cheat limit is strict (~75 studs/sec max)
-    -- We will use 50 studs/sec to be extra safe from "Anti-cheat rollback (AntiTp)"
-    local time = dist / 50
-    if time < 0.2 then time = 0.2 end
-    
-    local startTime = tick()
-    local conn
-    
-    local isAnchoredOriginal = false
-    if root:IsA("BasePart") then
-        isAnchoredOriginal = root.Anchored
-        root.Anchored = true
-    end
-    
-    conn = RunService.Heartbeat:Connect(function()
-        if not root or not root.Parent or not model.Parent then
-            conn:Disconnect()
-            return
+    -- Fast bypass teleport (moves in 150-stud chunks per frame)
+    task.spawn(function()
+        local isAnchoredOriginal = false
+        if root:IsA("BasePart") then
+            isAnchoredOriginal = root.Anchored
+            root.Anchored = true
         end
+
+        local stepDist = 150
+        local steps = math.ceil(dist / stepDist)
         
-        local elapsed = tick() - startTime
-        local alpha = elapsed / time
-        
-        if alpha >= 1 then
-            model:PivotTo(CFrame.new(finalPos))
-            if root:IsA("BasePart") then
-                root.Anchored = isAnchoredOriginal
-                root.AssemblyLinearVelocity = Vector3.zero
-            end
-            conn:Disconnect()
-        else
+        for i = 1, steps do
+            if not root or not root.Parent or not model.Parent then break end
+            local alpha = i / steps
             local currentPos = startPos:Lerp(finalPos, alpha)
             model:PivotTo(CFrame.new(currentPos))
             if root:IsA("BasePart") then
                 root.AssemblyLinearVelocity = Vector3.zero
             end
+            RunService.Heartbeat:Wait()
+        end
+        
+        if root:IsA("BasePart") and root.Parent then
+            root.Anchored = isAnchoredOriginal
+            root.AssemblyLinearVelocity = Vector3.zero
+        end
+        if humanoid then
+            pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) end)
         end
     end)
 end
@@ -942,6 +948,17 @@ local function refreshPlayerList()
             pName.TextXAlignment = Enum.TextXAlignment.Left
             pName.Parent = pFrame
             
+            local pDist = Instance.new("TextLabel")
+            pDist.Size = UDim2.new(0, 100, 1, 0)
+            pDist.Position = UDim2.new(1, -160, 0, 0)
+            pDist.BackgroundTransparency = 1
+            pDist.Text = "0m"
+            pDist.TextColor3 = Color3.fromRGB(150, 150, 150)
+            pDist.Font = Enum.Font.Gotham
+            pDist.TextSize = 12
+            pDist.TextXAlignment = Enum.TextXAlignment.Right
+            pDist.Parent = pFrame
+            
             local tpBtn = Instance.new("TextButton")
             tpBtn.Size = UDim2.new(0, 50, 0, 25)
             tpBtn.Position = UDim2.new(1, -55, 0, 5)
@@ -956,6 +973,20 @@ local function refreshPlayerList()
             connectSignal(tpBtn.MouseButton1Click, function()
                 if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     teleportTo(p.Character.HumanoidRootPart.Position, true)
+                end
+            end)
+            
+            task.spawn(function()
+                while pFrame.Parent do
+                    pcall(function()
+                        if p.Character and p.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                            local d = (p.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                            pDist.Text = math.floor(d) .. "m"
+                        else
+                            pDist.Text = "?m"
+                        end
+                    end)
+                    task.wait(0.5)
                 end
             end)
             
