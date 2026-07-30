@@ -712,9 +712,14 @@ connectSignal(RunService.RenderStepped, function()
     -- Update Aimbot
     if isAimbotEnabled() and hasWeapon and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") and UserInputService:IsKeyDown(Enum.KeyCode.Q) then
         aimbotActive = true
-        local headPos = aimbotTarget.Character.Head.Position
-        local targetCFrame = CFrame.new(Camera.CFrame.Position, headPos)
-        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.5)
+        local humanoid = aimbotTarget.Character:FindFirstChild("Humanoid")
+        if humanoid and humanoid.Health <= 0 then
+            aimbotTarget = getClosestPlayerToCursor()
+        end
+        if aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") then
+            local headPos = aimbotTarget.Character.Head.Position
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, headPos)
+        end
     else
         aimbotActive = false
     end
@@ -728,16 +733,42 @@ pcall(function()
     setreadonly(mt, false)
     
     mt.__index = newcclosure(function(self, key)
-        if aimbotActive and not checkcaller() and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") then
-            if typeof(self) == "Instance" and self:IsA("Mouse") then
-                if key == "Hit" then
-                    return aimbotTarget.Character.Head.CFrame
-                elseif key == "Target" then
-                    return aimbotTarget.Character.Head
-                elseif key == "UnitRay" then
-                    local origin = Camera.CFrame.Position
-                    local head = aimbotTarget.Character.Head.Position
-                    return Ray.new(origin, (head - origin).Unit)
+        if not checkcaller() then
+            -- Anti-cheat bypasses for LocalChecks
+            if typeof(self) == "Instance" then
+                if self:IsA("Humanoid") then
+                    if key == "FloorMaterial" then
+                        if isFlyEnabled() or isCustomSpeed() or isTPing then
+                            return Enum.Material.Plastic
+                        end
+                    elseif key == "Sit" then
+                        if isFlyEnabled() or isCustomSpeed() or isTPing then
+                            return true
+                        end
+                    elseif key == "WalkSpeed" then
+                        if isCustomSpeed() then return 16 end
+                    end
+                elseif self:IsA("BasePart") and self.Name == "HumanoidRootPart" then
+                    if key == "Velocity" or key == "AssemblyLinearVelocity" then
+                        if isFlyEnabled() or isCustomSpeed() or isTPing then
+                            return Vector3.zero
+                        end
+                    end
+                end
+            end
+            
+            -- Silent aim
+            if aimbotActive and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") then
+                if typeof(self) == "Instance" and self:IsA("Mouse") then
+                    if key == "Hit" then
+                        return aimbotTarget.Character.Head.CFrame
+                    elseif key == "Target" then
+                        return aimbotTarget.Character.Head
+                    elseif key == "UnitRay" then
+                        local origin = Camera.CFrame.Position
+                        local head = aimbotTarget.Character.Head.Position
+                        return Ray.new(origin, (head - origin).Unit)
+                    end
                 end
             end
         end
@@ -750,10 +781,28 @@ pcall(function()
         local method = getnamecallmethod()
         
         if not checkcaller() then
+            if method == "GetState" and typeof(self) == "Instance" and self:IsA("Humanoid") then
+                if isFlyEnabled() or isCustomSpeed() or isTPing then
+                    return Enum.HumanoidStateType.Running
+                end
+            end
+            
             -- AntiCheat Blocker (Optimized to prevent lag)
             if method == "FireServer" or method == "InvokeServer" then
                 if typeof(self) == "Instance" then
                     local name = self.Name
+                    
+                    if isAnalyzing then
+                        local args = {...}
+                        local strArgs = {}
+                        for i, v in ipairs(args) do
+                            strArgs[i] = type(v) == "string" and ('"' .. v .. '"') or tostring(v)
+                        end
+                        task.spawn(function()
+                            addLog("[" .. method .. "] " .. name .. " | Args: " .. table.concat(strArgs, ", "))
+                        end)
+                    end
+                    
                     local isBlocked = blockedRemotes[name]
                     if isBlocked == nil then
                         local lowerName = string.lower(name)
@@ -845,18 +894,13 @@ connectSignal(Players.PlayerRemoving, function(player)
 end)
 
 -- TELEPORTS
+local isTPing = false
 local function teleportTo(targetPos, keepVehicle)
     local root = getCharRoot(keepVehicle)
     if not root then return end
     
     local char = LocalPlayer.Character
     local humanoid = char and char:FindFirstChild("Humanoid")
-    if humanoid then
-        pcall(function()
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-            humanoid:ChangeState(Enum.HumanoidStateType.PlatformStanding)
-        end)
-    end
     
     local model = root:FindFirstAncestorWhichIsA("Model") or root.Parent
     local startPos = root.Position
@@ -871,7 +915,8 @@ local function teleportTo(targetPos, keepVehicle)
         return
     end
     
-    -- Fast bypass teleport (moves in 150-stud chunks per frame)
+    -- Fast bypass teleport (moves in chunks per frame)
+    isTPing = true
     task.spawn(function()
         local isAnchoredOriginal = false
         if root:IsA("BasePart") then
@@ -879,7 +924,7 @@ local function teleportTo(targetPos, keepVehicle)
             root.Anchored = true
         end
 
-        local stepDist = 150
+        local stepDist = 350
         local steps = math.ceil(dist / stepDist)
         
         for i = 1, steps do
@@ -900,6 +945,8 @@ local function teleportTo(targetPos, keepVehicle)
         if humanoid then
             pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) end)
         end
+        task.wait(0.2)
+        isTPing = false
     end)
 end
 
@@ -1010,6 +1057,101 @@ connectSignal(RefreshBtn.MouseButton1Click, refreshPlayerList)
 connectSignal(Players.PlayerAdded, refreshPlayerList)
 connectSignal(Players.PlayerRemoving, refreshPlayerList)
 refreshPlayerList()
+
+-- ANALYZER
+local AnalyzerTab = createTab("АНАЛИЗАТОР")
+createLabel("АНАЛИЗАТОР СЕТИ (ЛОГИ)", AnalyzerTab)
+
+local isAnalyzing = false
+local loggedEvents = {}
+local updateAnalyzerUI
+
+local toggleAnalyzerBtn = Instance.new("TextButton")
+toggleAnalyzerBtn.Size = UDim2.new(1, 0, 0, 30)
+toggleAnalyzerBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+toggleAnalyzerBtn.Text = "Начать запись"
+toggleAnalyzerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleAnalyzerBtn.Font = Enum.Font.GothamBold
+toggleAnalyzerBtn.TextSize = 14
+toggleAnalyzerBtn.Parent = AnalyzerTab
+Instance.new("UICorner", toggleAnalyzerBtn).CornerRadius = UDim.new(0, 6)
+
+local copyAnalyzerBtn = Instance.new("TextButton")
+copyAnalyzerBtn.Size = UDim2.new(1, 0, 0, 30)
+copyAnalyzerBtn.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
+copyAnalyzerBtn.Text = "Скопировать логи"
+copyAnalyzerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyAnalyzerBtn.Font = Enum.Font.GothamBold
+copyAnalyzerBtn.TextSize = 14
+copyAnalyzerBtn.Parent = AnalyzerTab
+Instance.new("UICorner", copyAnalyzerBtn).CornerRadius = UDim.new(0, 6)
+
+local clearAnalyzerBtn = Instance.new("TextButton")
+clearAnalyzerBtn.Size = UDim2.new(1, 0, 0, 30)
+clearAnalyzerBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+clearAnalyzerBtn.Text = "Очистить логи"
+clearAnalyzerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+clearAnalyzerBtn.Font = Enum.Font.GothamBold
+clearAnalyzerBtn.TextSize = 14
+clearAnalyzerBtn.Parent = AnalyzerTab
+Instance.new("UICorner", clearAnalyzerBtn).CornerRadius = UDim.new(0, 6)
+
+local logScroll = Instance.new("ScrollingFrame")
+logScroll.Size = UDim2.new(1, 0, 0, 250)
+logScroll.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+logScroll.ScrollBarThickness = 4
+logScroll.Parent = AnalyzerTab
+Instance.new("UICorner", logScroll).CornerRadius = UDim.new(0, 6)
+
+local logLayout = Instance.new("UIListLayout")
+logLayout.SortOrder = Enum.SortOrder.LayoutOrder
+logLayout.Padding = UDim.new(0, 2)
+logLayout.Parent = logScroll
+
+function updateAnalyzerUI(msg)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 16)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = " " .. msg
+    lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+    lbl.TextSize = 11
+    lbl.Font = Enum.Font.Code
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = logScroll
+end
+
+connectSignal(toggleAnalyzerBtn.MouseButton1Click, function()
+    isAnalyzing = not isAnalyzing
+    if isAnalyzing then
+        toggleAnalyzerBtn.Text = "Остановить запись"
+        toggleAnalyzerBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 50)
+    else
+        toggleAnalyzerBtn.Text = "Начать запись"
+        toggleAnalyzerBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    end
+end)
+
+connectSignal(copyAnalyzerBtn.MouseButton1Click, function()
+    if setclipboard then
+        setclipboard(table.concat(loggedEvents, "\n"))
+        copyAnalyzerBtn.Text = "Скопировано!"
+        task.delay(2, function() copyAnalyzerBtn.Text = "Скопировать логи" end)
+    end
+end)
+
+connectSignal(clearAnalyzerBtn.MouseButton1Click, function()
+    table.clear(loggedEvents)
+    for _, c in ipairs(logScroll:GetChildren()) do
+        if c:IsA("TextLabel") then c:Destroy() end
+    end
+end)
+
+local function addLog(msg)
+    if #loggedEvents > 500 then table.remove(loggedEvents, 1) end
+    table.insert(loggedEvents, msg)
+    if updateAnalyzerUI then updateAnalyzerUI(msg) end
+end
 
 -- MENU TOGGLE
 createLabel("КНОПКА МЕНЮ", MainTab)
