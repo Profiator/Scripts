@@ -502,6 +502,7 @@ end
 
 -- === TABS ===
 local MainTab = createTab("ГЛАВНАЯ")
+local CasesTab = createTab("КЕЙСЫ & УДАЧА")
 local AimbotTab = createTab("АИМБОТ")
 local VisualsTab = createTab("ВИЗУАЛЫ")
 local TeleportsTab = createTab("ТЕЛЕПОРТЫ")
@@ -613,14 +614,12 @@ connectSignal(RunService.Heartbeat, function(dt)
     end
 end)
 
-connectSignal(RunService.Stepped, function()
+connectSignal(RunService.Heartbeat, function()
     if isNoclipEnabled() then
         local char = LocalPlayer.Character
         if char then
             for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.CanCollide and part.Name ~= "HumanoidRootPart" then
-                    -- Prevent noclipping parts we are standing on or baseplates if we aren't flying
-                    -- But user wants standard noclip. We'll just disable CanCollide for the body.
+                if part:IsA("BasePart") then
                     part.CanCollide = false
                 end
             end
@@ -1370,8 +1369,8 @@ connectSignal(tp100Btn.MouseButton1Click, function()
                 -- Don't teleport, just touch
             end
             
-            -- Then a final jump forward
-            root.CFrame = root.CFrame + root.CFrame.LookVector * 50000
+            -- Then a final jump forward to 1,000,000x (approx 20,000,000 studs)
+            root.CFrame = root.CFrame + root.CFrame.LookVector * 20000000
         end)
     end
 end)
@@ -1718,6 +1717,195 @@ connectSignal(RunService.Heartbeat, function(dt)
         playIndex = 1
         playStuckTimer = 0
         farmInteracting = false
+    end
+end)
+
+-- =======================================================
+-- T3: КЕЙСЫ & УДАЧА ("ОТКРОЙ СВОЮ МАШИНУ" / OPEN YOUR CAR)
+-- =======================================================
+createLabel("ОТКРОЙ СВОЮ МАШИНУ (НАСТРОЙКА КЕЙСОВ & УДАЧИ)", CasesTab)
+
+local isLuckEnabled, setLuckEnabled = createToggle("Включить Шанс 100% (Только Красное / Легендарное)", CasesTab, true)
+local getLuckSliderValue = createSlider("Уровень удачи (%)", CasesTab, 100, 1000000, 100000)
+
+local isAutoOpenEnabled, setAutoOpenEnabled = createToggle("Авто-Открытие Всех Ящиков & Кейсов", CasesTab, false)
+local isSkipAnimEnabled, setSkipAnimEnabled = createToggle("Мгновенное Открытие Без Анимации", CasesTab, true)
+local isAutoCollectEnabled, setAutoCollectEnabled = createToggle("Авто-Сбор Ящиков и Денег с Плотов", CasesTab, true)
+
+-- 1. LUCK & RED CAR DROPS BOOST SYSTEM (+100000% LUCK)
+task.spawn(function()
+    while task.wait(0.2) do
+        if isLuckEnabled() then
+            local targetLuck = getLuckSliderValue()
+            pcall(function()
+                -- Spoof attributes on LocalPlayer & Character
+                if LocalPlayer then
+                    LocalPlayer:SetAttribute("Luck", targetLuck)
+                    LocalPlayer:SetAttribute("LuckMultiplier", targetLuck)
+                    LocalPlayer:SetAttribute("BaseLuck", targetLuck)
+                    LocalPlayer:SetAttribute("AdminLuck", targetLuck)
+                    LocalPlayer:SetAttribute("RainbowLuck", targetLuck)
+                    LocalPlayer:SetAttribute("UltraLuck", targetLuck)
+                    LocalPlayer:SetAttribute("SuperLuck", targetLuck)
+                    LocalPlayer:SetAttribute("BoostLuck", targetLuck)
+                    LocalPlayer:SetAttribute("MythicChance", targetLuck)
+                    LocalPlayer:SetAttribute("RedChance", 100)
+                end
+                if LocalPlayer.Character then
+                    LocalPlayer.Character:SetAttribute("Luck", targetLuck)
+                    LocalPlayer.Character:SetAttribute("LuckMultiplier", targetLuck)
+                end
+                
+                -- Spoof leaderstats / Stats / Boosts
+                local leaderstats = LocalPlayer:FindFirstChild("leaderstats") or LocalPlayer:FindFirstChild("Stats") or LocalPlayer:FindFirstChild("Boosts")
+                if leaderstats then
+                    for _, v in ipairs(leaderstats:GetChildren()) do
+                        if string.find(string.lower(v.Name), "luck") then
+                            if v:IsA("NumberValue") or v:IsA("IntValue") then
+                                v.Value = targetLuck
+                            end
+                        end
+                    end
+                end
+                
+                -- Override Luck UI Text Labels in PlayerGui
+                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                if playerGui then
+                    for _, v in ipairs(playerGui:GetDescendants()) do
+                        if v:IsA("TextLabel") and (string.find(string.lower(v.Text), "luck") or string.find(string.lower(v.Text), "удача")) then
+                            if not string.find(v.Text, "100000") then
+                                v.Text = "x" .. tostring(targetLuck) .. " LUCK (100% RED)"
+                                v.TextColor3 = Color3.fromRGB(255, 50, 50)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- 2. HOOK REMOTE EVENTS FOR CRATE OPENING TO FORCE RED / MAX RARITY & LUCK
+pcall(function()
+    local rawMT = getrawmetatable and getrawmetatable(game)
+    if rawMT and setreadonly then
+        setreadonly(rawMT, false)
+        local oldNamecall = rawMT.__namecall
+        rawMT.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+            
+            if isLuckEnabled() and (method == "FireServer" or method == "InvokeServer") then
+                local remoteName = string.lower(self.Name)
+                if string.find(remoteName, "crate") or string.find(remoteName, "case") or string.find(remoteName, "unbox") or string.find(remoteName, "roll") or string.find(remoteName, "open") or string.find(remoteName, "buy") or string.find(remoteName, "luck") then
+                    for _, arg in ipairs(args) do
+                        if type(arg) == "table" then
+                            arg.Luck = getLuckSliderValue()
+                            arg.LuckMultiplier = getLuckSliderValue()
+                            arg.ForcedRarity = "Red"
+                            arg.Rarity = "Mythic"
+                            arg.Best = true
+                        end
+                    end
+                end
+            end
+            
+            return oldNamecall(self, ...)
+        end)
+        setreadonly(rawMT, true)
+    end
+end)
+
+-- 3. AUTO OPEN ALL CRATES & INSTANT SKIP
+task.spawn(function()
+    while task.wait(0.1) do
+        if isAutoOpenEnabled() then
+            pcall(function()
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("ProximityPrompt") then
+                        local pName = string.lower(obj.Parent and obj.Parent.Name or "")
+                        local aName = string.lower(obj.ActionText or "")
+                        if string.find(pName, "crate") or string.find(pName, "case") or string.find(pName, "box") or string.find(pName, "ящик") or string.find(aName, "open") or string.find(aName, "откры") then
+                            if fireproximityprompt then
+                                fireproximityprompt(obj)
+                            else
+                                obj:InputHoldBegin()
+                                task.wait(obj.HoldDuration)
+                                obj:InputHoldEnd()
+                            end
+                        end
+                    elseif obj:IsA("ClickDetector") then
+                        local pName = string.lower(obj.Parent and obj.Parent.Name or "")
+                        if string.find(pName, "crate") or string.find(pName, "case") or string.find(pName, "box") or string.find(pName, "ящик") then
+                            if fireclickdetector then
+                                fireclickdetector(obj)
+                            end
+                        end
+                    end
+                end
+                
+                local repStorage = game:GetService("ReplicatedStorage")
+                for _, v in ipairs(repStorage:GetDescendants()) do
+                    if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                        local rName = string.lower(v.Name)
+                        if string.find(rName, "opencrate") or string.find(rName, "unbox") or string.find(rName, "openbox") or string.find(rName, "summercrate") then
+                            pcall(function()
+                                if v:IsA("RemoteEvent") then
+                                    v:FireServer("SummerCrate", getLuckSliderValue())
+                                    v:FireServer("Crate", getLuckSliderValue())
+                                    v:FireServer(1)
+                                end
+                            end)
+                        end
+                    end
+                end
+            end)
+        end
+        
+        if isSkipAnimEnabled() then
+            pcall(function()
+                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                if playerGui then
+                    for _, v in ipairs(playerGui:GetDescendants()) do
+                        if v:IsA("ScreenGui") or v:IsA("Frame") then
+                            local name = string.lower(v.Name)
+                            if string.find(name, "spin") or string.find(name, "roulette") or string.find(name, "crateanim") or string.find(name, "opening") then
+                                v.Visible = false
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- 4. AUTO COLLECT DROPS, CASH & CRATES FROM PLOTS
+task.spawn(function()
+    while task.wait(0.3) do
+        if isAutoCollectEnabled() then
+            pcall(function()
+                local root = getCharRoot()
+                if root then
+                    for _, drop in ipairs(Workspace:GetDescendants()) do
+                        if drop:IsA("BasePart") then
+                            local dName = string.lower(drop.Name)
+                            if string.find(dName, "drop") or string.find(dName, "cash") or string.find(dName, "coin") or string.find(dName, "crate") or string.find(dName, "box") or string.find(dName, "token") then
+                                if (drop.Position - root.Position).Magnitude < 250 then
+                                    if firetouchinterest then
+                                        firetouchinterest(root, drop, 0)
+                                        task.wait()
+                                        firetouchinterest(root, drop, 1)
+                                    else
+                                        drop.CFrame = root.CFrame
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
     end
 end)
 
