@@ -1469,9 +1469,589 @@ connectSignal(Players.PlayerAdded, refreshPlayerList)
 connectSignal(Players.PlayerRemoving, refreshPlayerList)
 refreshPlayerList()
 
--- FARM ROUTE
-local FarmTab = createTab("ФАРМ")
-createLabel("МАРШРУТ (ФАРМ)", FarmTab)
+-- PLOT / TYCOON AUTO-FARM ENGINE (PLOT CHOOSER & AUTOCOLLECT)
+createLabel("ТАЙКУНЫ И ПЛОТЫ (PLOT CHOOSER & AUTOCOLLECT)", FarmTab)
+
+local plotChooserSelectedPlot = nil
+local plotChooserAutoCollectEnabled = false
+local plotChooserAutoLockEnabled = false
+local plotChooserSpeedEnabled = false
+local plotChooserCollectDelay = 1 / 80
+local plotChooserLockSpeed = 250
+
+local plotChooserAutoCollectToggle, setPlotChooserAutoCollect = createToggle("Авто-Сбор объектов плота (AutoCollect)", FarmTab, false)
+local plotChooserAutoLockToggle, setPlotChooserAutoLock = createToggle("Авто-Защита плота (Auto Lock Pad)", FarmTab, false)
+local plotChooserSpeedToggle, setPlotChooserSpeed = createToggle("Замок Скорости 250 (Speed Lock)", FarmTab, false)
+
+local launchPlotChooserBtn = Instance.new("TextButton")
+launchPlotChooserBtn.Size = UDim2.new(1, 0, 0, 35)
+launchPlotChooserBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 220)
+launchPlotChooserBtn.Text = "🎯 ЗАПУСТИТЬ ИНТЕРАКТИВНЫЙ ВЫБОР ПЛОТА (PLOT CHOOSER)"
+launchPlotChooserBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+launchPlotChooserBtn.Font = Enum.Font.GothamBold
+launchPlotChooserBtn.TextSize = 13
+launchPlotChooserBtn.Parent = FarmTab
+Instance.new("UICorner", launchPlotChooserBtn).CornerRadius = UDim.new(0, 6)
+
+local collectStolenMainBtn = Instance.new("TextButton")
+collectStolenMainBtn.Size = UDim2.new(1, 0, 0, 30)
+collectStolenMainBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 200)
+collectStolenMainBtn.Text = "⚡ Собрать Украденное (Teleport to Plot)"
+collectStolenMainBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+collectStolenMainBtn.Font = Enum.Font.GothamBold
+collectStolenMainBtn.TextSize = 13
+collectStolenMainBtn.Parent = FarmTab
+Instance.new("UICorner", collectStolenMainBtn).CornerRadius = UDim.new(0, 6)
+
+connectSignal(collectStolenMainBtn.MouseButton1Click, function()
+    pcall(function()
+        if plotChooserSelectedPlot and plotChooserSelectedPlot:FindFirstChild("Teleport") then
+            local tpPart = plotChooserSelectedPlot.Teleport
+            if tpPart:IsA("BasePart") then
+                local root = getCharRoot()
+                if root then root.CFrame = tpPart.CFrame end
+            end
+        else
+            -- Try to find plot automatically
+            local plots = Workspace:FindFirstChild("Plots")
+            if plots then
+                for _, plot in ipairs(plots:GetChildren()) do
+                    local tpPart = plot:FindFirstChild("Teleport")
+                    if tpPart and tpPart:IsA("BasePart") then
+                        local root = getCharRoot()
+                        if root then root.CFrame = tpPart.CFrame break end
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+-- Function to start standalone enhanced Plot Chooser UI
+local function launchPlotChooserOverlay()
+    pcall(function()
+        local TweenService = game:GetService("TweenService")
+        local player = LocalPlayer
+        local mouse = player:GetMouse()
+
+        local selectedPlot = plotChooserSelectedPlot
+        local collectibleObjects = {}
+        local autoCollectEnabled = false
+        local autoCollectThread = nil
+        local collectDelay = 1 / 80
+
+        local speedEnabled = false
+        local savedWalkSpeed = 16
+        local speedWatcher = nil
+        local LOCK_SPEED = 250
+
+        local teleportAnchor = nil
+        local teleportWeld = nil
+        local savedReturnCFrame = nil
+
+        local autoLockEnabled = false
+        local autoLockThread = nil
+
+        local minimised = false
+        local EXPANDED_HEIGHT = 340
+        local MINI_HEIGHT = 42
+
+        -- Existing GUI check
+        local existing = player:WaitForChild("PlayerGui"):FindFirstChild("PlotChooser")
+        if existing then existing:Destroy() end
+
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "PlotChooser"
+        gui.ResetOnSpawn = false
+        gui.Parent = player:WaitForChild("PlayerGui")
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.fromOffset(350, 120)
+        frame.Position = UDim2.fromScale(0.5, 0.08)
+        frame.AnchorPoint = Vector2.new(0.5, 0)
+        frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+        frame.BorderSizePixel = 0
+        frame.ClipsDescendants = true
+        frame.Parent = gui
+
+        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+        local frameStroke = Instance.new("UIStroke")
+        frameStroke.Color = Color3.fromRGB(0, 170, 255)
+        frameStroke.Thickness = 1.5
+        frameStroke.Parent = frame
+
+        local title = Instance.new("TextLabel")
+        title.Name = "Title"
+        title.Size = UDim2.new(1, -20, 0, 60)
+        title.Position = UDim2.fromOffset(10, 10)
+        title.BackgroundTransparency = 1
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 22
+        title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        title.TextWrapped = true
+        title.Text = "Кликните на Плот для выбора"
+        title.Parent = frame
+
+        local cancel = Instance.new("TextButton")
+        cancel.Size = UDim2.fromOffset(90, 32)
+        cancel.Position = UDim2.new(1, -100, 1, -36)
+        cancel.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        cancel.BorderSizePixel = 0
+        cancel.TextColor3 = Color3.new(1, 1, 1)
+        cancel.Font = Enum.Font.GothamBold
+        cancel.TextSize = 14
+        cancel.Text = "Отмена"
+        cancel.Parent = frame
+
+        Instance.new("UICorner", cancel).CornerRadius = UDim.new(0, 8)
+
+        local highlights = {}
+        local finished = false
+        local clickConnection
+
+        local function cleanup()
+            for _, highlight in pairs(highlights) do
+                if highlight then highlight:Destroy() end
+            end
+            highlights = {}
+            if clickConnection then clickConnection:Disconnect() end
+        end
+
+        local function unloadScript()
+            autoCollectEnabled = false
+            speedEnabled = false
+            autoLockEnabled = false
+            setPlotChooserAutoCollect(false)
+            setPlotChooserAutoLock(false)
+            setPlotChooserSpeed(false)
+
+            if speedWatcher then speedWatcher:Disconnect() speedWatcher = nil end
+
+            local character = player.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Parent then
+                humanoid.WalkSpeed = savedWalkSpeed
+                humanoid.PlatformStand = false
+            end
+
+            if teleportWeld then teleportWeld:Destroy() teleportWeld = nil end
+            if character then
+                local hrp = character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local att = hrp:FindFirstChild("_CollectAtt1")
+                    if att then att:Destroy() end
+                end
+                local anchor = character:FindFirstChild("_CollectAnchor")
+                if anchor then anchor:Destroy() end
+            end
+            teleportAnchor = nil
+
+            local fadeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Linear)
+            TweenService:Create(frame, fadeInfo, { BackgroundTransparency = 1 }):Play()
+            task.wait(0.2)
+            gui:Destroy()
+        end
+
+        local function createAnchorPart(character)
+            local hrp = character:FindFirstChild("HumanoidRootPart")
+            if not hrp then return nil end
+            local part = Instance.new("Part")
+            part.Name = "_CollectAnchor"
+            part.Size = Vector3.new(0.1, 0.1, 0.1)
+            part.Transparency = 1
+            part.CanCollide = false
+            part.CanTouch = false
+            part.CanQuery = false
+            part.Anchored = true
+            part.CFrame = hrp.CFrame
+            part.Parent = character
+            return part
+        end
+
+        local function attachAnchorToHRP(anchorPart, hrp)
+            local att0 = Instance.new("Attachment")
+            att0.Name = "_CollectAtt0"
+            att0.Position = Vector3.zero
+            att0.Parent = anchorPart
+
+            local att1 = Instance.new("Attachment")
+            att1.Name = "_CollectAtt1"
+            att1.Position = Vector3.zero
+            att1.Parent = hrp
+
+            local w = Instance.new("WeldConstraint")
+            w.Name = "_CollectWeld"
+            w.Part0 = anchorPart
+            w.Part1 = hrp
+            w.Parent = anchorPart
+
+            anchorPart.Anchored = false
+            return w
+        end
+
+        local function cleanupAnchor(character)
+            if teleportWeld then teleportWeld:Destroy() teleportWeld = nil end
+            if character then
+                local hrp = character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local att1 = hrp:FindFirstChild("_CollectAtt1")
+                    if att1 then att1:Destroy() end
+                end
+            end
+            if teleportAnchor and teleportAnchor.Parent then teleportAnchor:Destroy() end
+            teleportAnchor = nil
+        end
+
+        local function teleportTo(targetCFrame)
+            if not teleportAnchor or not teleportAnchor.Parent then return end
+            teleportAnchor.Anchored = true
+            teleportAnchor.CFrame = targetCFrame
+            task.wait()
+            teleportAnchor.Anchored = false
+        end
+
+        local function buildCollectibleObjects()
+            table.clear(collectibleObjects)
+            if selectedPlot and selectedPlot:FindFirstChild("Objects") then
+                for _, object in ipairs(selectedPlot.Objects:GetChildren()) do
+                    local objectGui = object:FindFirstChild("ObjectGui")
+                    if objectGui then
+                        local frameObj = objectGui:FindFirstChild("Frame")
+                        if frameObj then
+                            local amount = frameObj:FindFirstChild("Amount")
+                            if amount and amount:IsA("TextLabel") then
+                                if not string.find(amount.Text, "s") then
+                                    table.insert(collectibleObjects, object)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        local function startAutoCollect()
+            if autoCollectThread then return end
+            buildCollectibleObjects()
+            autoCollectThread = task.spawn(function()
+                local startCharacter = player.Character
+                local startHRP = startCharacter and startCharacter:FindFirstChild("HumanoidRootPart")
+                savedReturnCFrame = startHRP and startHRP.CFrame or nil
+
+                while autoCollectEnabled do
+                    local character = player.Character
+                    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+                    if hrp and humanoid then
+                        if not teleportAnchor or not teleportAnchor.Parent then
+                            cleanupAnchor(character)
+                            teleportAnchor = createAnchorPart(character)
+                            if teleportAnchor then
+                                teleportWeld = attachAnchorToHRP(teleportAnchor, hrp)
+                                humanoid.PlatformStand = true
+                            end
+                        end
+
+                        for _, object in ipairs(collectibleObjects) do
+                            if not autoCollectEnabled then break end
+                            local primary = object:FindFirstChild("Primary")
+                            if primary and primary:IsA("BasePart") then
+                                teleportTo(primary.CFrame)
+                                task.wait(collectDelay)
+                            else
+                                task.wait(0.03)
+                            end
+                        end
+                    end
+                    task.wait(0.05)
+                end
+
+                local character = player.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                cleanupAnchor(character)
+                if humanoid and humanoid.Parent then humanoid.PlatformStand = false end
+                if savedReturnCFrame and character and character:FindFirstChild("HumanoidRootPart") then
+                    character.HumanoidRootPart.CFrame = savedReturnCFrame
+                    savedReturnCFrame = nil
+                end
+                autoCollectThread = nil
+            end)
+        end
+
+        local function startAutoLock()
+            if autoLockThread then return end
+            autoLockThread = task.spawn(function()
+                while autoLockEnabled do
+                    if selectedPlot then
+                        local lockRings = selectedPlot:FindFirstChild("LockRings")
+                        local lockPlot = selectedPlot:FindFirstChild("LockPlot")
+                        local entrance1 = lockRings and lockRings:FindFirstChild("Entrance1")
+                        local pad = lockPlot and lockPlot:FindFirstChild("Pad")
+
+                        if entrance1 and pad and entrance1:IsA("BasePart") and pad:IsA("BasePart") and entrance1.Transparency == 1 then
+                            local character = player.Character
+                            local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                            if hrp then
+                                local origCF = pad.CFrame
+                                local origCan = pad.CanCollide
+                                pad.CanCollide = false
+                                pcall(function()
+                                    pad.CFrame = hrp.CFrame
+                                    task.wait(0.15)
+                                    pad.CFrame = origCF
+                                    task.wait(0.15)
+                                end)
+                                pad.CanCollide = origCan
+                            end
+                        end
+                    end
+                    task.wait(0.1)
+                end
+                autoLockThread = nil
+            end)
+        end
+
+        local function createMainMenu()
+            for _, obj in ipairs(frame:GetChildren()) do
+                if obj:IsA("TextLabel") then
+                    TweenService:Create(obj, TweenInfo.new(0.35, Enum.EasingStyle.Linear), { TextTransparency = 1 }):Play()
+                    task.delay(0.35, function() if obj and obj.Parent then obj:Destroy() end end)
+                end
+            end
+            task.wait(0.35)
+
+            cancel.Text = "Закрыть"
+
+            local minBtn = Instance.new("TextButton")
+            minBtn.Name = "MinimiseBtn"
+            minBtn.Size = UDim2.fromOffset(24, 24)
+            minBtn.Position = UDim2.fromOffset(8, 6)
+            minBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            minBtn.BorderSizePixel = 0
+            minBtn.TextColor3 = Color3.new(1, 1, 1)
+            minBtn.Font = Enum.Font.GothamBold
+            minBtn.TextSize = 16
+            minBtn.Text = "−"
+            minBtn.ZIndex = 10
+            minBtn.Parent = frame
+            Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+
+            frame.AnchorPoint = Vector2.new(1, 0)
+            TweenService:Create(frame, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(350, EXPANDED_HEIGHT),
+                Position = UDim2.new(1, -20, 0, 20),
+            }):Play()
+
+            task.wait(0.45)
+            cancel.Position = UDim2.new(1, -100, 1, -36)
+
+            local ROW_OFFSET = 36
+            local function makeLabel(text, yPos)
+                local lbl = Instance.new("TextLabel")
+                lbl.BackgroundTransparency = 1
+                lbl.Size = UDim2.new(1, -100, 0, 40)
+                lbl.Position = UDim2.fromOffset(15, yPos)
+                lbl.Font = Enum.Font.GothamBold
+                lbl.TextSize = 16
+                lbl.TextColor3 = Color3.new(1, 1, 1)
+                lbl.TextXAlignment = Enum.TextXAlignment.Left
+                lbl.Text = text
+                lbl.Parent = frame
+                return lbl
+            end
+
+            local function makeSwitch(yPos)
+                local sw = Instance.new("TextButton")
+                sw.AutoButtonColor = false
+                sw.Text = ""
+                sw.Size = UDim2.fromOffset(52, 28)
+                sw.Position = UDim2.new(1, -70, 0, yPos)
+                sw.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+                sw.BorderSizePixel = 0
+                sw.Parent = frame
+                Instance.new("UICorner", sw).CornerRadius = UDim.new(1, 0)
+
+                local knob = Instance.new("Frame")
+                knob.Size = UDim2.fromOffset(22, 22)
+                knob.Position = UDim2.fromOffset(3, 3)
+                knob.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
+                knob.BorderSizePixel = 0
+                knob.Parent = sw
+                Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+                return sw, knob
+            end
+
+            local function animateSwitch(sw, knob, state)
+                if state then
+                    TweenService:Create(sw, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { BackgroundColor3 = Color3.fromRGB(0, 200, 100) }):Play()
+                    TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Position = UDim2.fromOffset(27, 3) }):Play()
+                else
+                    TweenService:Create(sw, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { BackgroundColor3 = Color3.fromRGB(55, 55, 65) }):Play()
+                    TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Position = UDim2.fromOffset(3, 3) }):Play()
+                end
+            end
+
+            -- Row 1: AutoCollect
+            makeLabel("Авто-Сбор (AutoCollect)", 10 + ROW_OFFSET)
+            local acSwitch, acKnob = makeSwitch(16 + ROW_OFFSET)
+            acSwitch.MouseButton1Click:Connect(function()
+                autoCollectEnabled = not autoCollectEnabled
+                setPlotChooserAutoCollect(autoCollectEnabled)
+                animateSwitch(acSwitch, acKnob, autoCollectEnabled)
+                if autoCollectEnabled then startAutoCollect() end
+            end)
+
+            -- Row 2: Teleports/sec
+            local tpsLabel = Instance.new("TextLabel")
+            tpsLabel.BackgroundTransparency = 1
+            tpsLabel.Size = UDim2.fromOffset(140, 30)
+            tpsLabel.Position = UDim2.fromOffset(15, 65 + ROW_OFFSET)
+            tpsLabel.Font = Enum.Font.Gotham
+            tpsLabel.TextSize = 14
+            tpsLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+            tpsLabel.TextXAlignment = Enum.TextXAlignment.Left
+            tpsLabel.Text = "Скорость сбора (ТП/сек)"
+            tpsLabel.Parent = frame
+
+            local inputBox = Instance.new("TextBox")
+            inputBox.Size = UDim2.fromOffset(90, 28)
+            inputBox.Position = UDim2.new(1, -110, 0, 63 + ROW_OFFSET)
+            inputBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+            inputBox.BorderSizePixel = 0
+            inputBox.Font = Enum.Font.GothamBold
+            inputBox.TextSize = 14
+            inputBox.TextColor3 = Color3.new(1, 1, 1)
+            inputBox.Text = "80"
+            inputBox.ClearTextOnFocus = false
+            inputBox.Parent = frame
+            Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 6)
+
+            inputBox.FocusLost:Connect(function()
+                local raw = tonumber(inputBox.Text)
+                if raw and raw > 0 then
+                    raw = math.clamp(raw, 0.1, 120)
+                    collectDelay = 1 / raw
+                    inputBox.Text = tostring(raw)
+                else
+                    inputBox.Text = tostring(math.round(1 / collectDelay))
+                end
+            end)
+
+            -- Row 3: Speed 250
+            makeLabel("Скорость 250 (Speed Lock)", 110 + ROW_OFFSET)
+            local spSwitch, spKnob = makeSwitch(116 + ROW_OFFSET)
+            spSwitch.MouseButton1Click:Connect(function()
+                speedEnabled = not speedEnabled
+                setPlotChooserSpeed(speedEnabled)
+                animateSwitch(spSwitch, spKnob, speedEnabled)
+                local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    if speedEnabled then
+                        savedWalkSpeed = humanoid.WalkSpeed
+                        humanoid.WalkSpeed = LOCK_SPEED
+                        if speedWatcher then speedWatcher:Disconnect() end
+                        speedWatcher = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+                            if speedEnabled and humanoid.WalkSpeed ~= LOCK_SPEED then
+                                humanoid.WalkSpeed = LOCK_SPEED
+                            end
+                        end)
+                    else
+                        if speedWatcher then speedWatcher:Disconnect() speedWatcher = nil end
+                        humanoid.WalkSpeed = savedWalkSpeed
+                    end
+                end
+            end)
+
+            -- Row 4: Collect Stolen
+            makeLabel("Собрать украденное", 160 + ROW_OFFSET)
+            local collectStolenBtn = Instance.new("TextButton")
+            collectStolenBtn.Size = UDim2.fromOffset(90, 28)
+            collectStolenBtn.Position = UDim2.new(1, -110, 0, 163 + ROW_OFFSET)
+            collectStolenBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
+            collectStolenBtn.BorderSizePixel = 0
+            collectStolenBtn.Font = Enum.Font.GothamBold
+            collectStolenBtn.TextSize = 13
+            collectStolenBtn.TextColor3 = Color3.new(1, 1, 1)
+            collectStolenBtn.Text = "Телепорт"
+            collectStolenBtn.Parent = frame
+            Instance.new("UICorner", collectStolenBtn).CornerRadius = UDim.new(0, 6)
+
+            collectStolenBtn.MouseButton1Click:Connect(function()
+                if selectedPlot and selectedPlot:FindFirstChild("Teleport") then
+                    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and selectedPlot.Teleport:IsA("BasePart") then
+                        hrp.CFrame = selectedPlot.Teleport.CFrame
+                    end
+                end
+            end)
+
+            -- Row 5: Auto Lock
+            makeLabel("Авто-Замок Плота (Auto Lock)", 210 + ROW_OFFSET)
+            local alSwitch, alKnob = makeSwitch(216 + ROW_OFFSET)
+            alSwitch.MouseButton1Click:Connect(function()
+                autoLockEnabled = not autoLockEnabled
+                setPlotChooserAutoLock(autoLockEnabled)
+                animateSwitch(alSwitch, alKnob, autoLockEnabled)
+                if autoLockEnabled then startAutoLock() end
+            end)
+
+            -- Minimise button handler
+            minBtn.MouseButton1Click:Connect(function()
+                minimised = not minimised
+                local ti = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                if minimised then
+                    TweenService:Create(frame, ti, { Size = UDim2.fromOffset(350, MINI_HEIGHT) }):Play()
+                    minBtn.Text = "+"
+                else
+                    TweenService:Create(frame, ti, { Size = UDim2.fromOffset(350, EXPANDED_HEIGHT) }):Play()
+                    minBtn.Text = "−"
+                end
+            end)
+        end
+
+        -- Look for plots in workspace
+        local plotsContainer = Workspace:FindFirstChild("Plots") or Workspace
+        for _, plot in ipairs(plotsContainer:GetChildren()) do
+            local lockHitbox = plot:FindFirstChild("LockHitbox") or plot:FindFirstChild("Hitbox")
+            if lockHitbox and lockHitbox:IsA("BasePart") then
+                local highlight = Instance.new("Highlight")
+                highlight.Adornee = lockHitbox
+                highlight.FillColor = Color3.fromRGB(0, 170, 255)
+                highlight.FillTransparency = 0.5
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                highlight.OutlineTransparency = 0
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                highlight.Parent = lockHitbox
+                highlights[lockHitbox] = highlight
+            end
+        end
+
+        clickConnection = mouse.Button1Down:Connect(function()
+            if finished then return end
+            local target = mouse.Target
+            if target and highlights[target] then
+                finished = true
+                selectedPlot = target.Parent
+                plotChooserSelectedPlot = selectedPlot
+                cleanup()
+                task.spawn(createMainMenu)
+            end
+        end)
+
+        cancel.MouseButton1Click:Connect(function()
+            finished = true
+            cleanup()
+            task.spawn(unloadScript)
+        end)
+    end)
+end
+
+connectSignal(launchPlotChooserBtn.MouseButton1Click, launchPlotChooserOverlay)
+
+-- ROUTE RECORDING ENGINE
+createLabel("МАРШРУТ (ФАРМ ДВИЖЕНИЯ)", FarmTab)
 
 local isRecording, setRecording = createToggle("Запись маршрута", FarmTab)
 local isPlaying, setPlaying = createToggle("Воспроизведение маршрута", FarmTab)
