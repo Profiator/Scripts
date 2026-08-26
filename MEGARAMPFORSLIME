@@ -1,12 +1,40 @@
 -- MEGA RAMP FOR SLIME
--- Reconstructed from the original obfuscated script.
--- Original behavior preserved.
--- ONLY farm target changes:
---   Checkpoint "68" -> "92"
---   CFrame.new(-21, 3, 2101) -> CFrame.new(16.58, 4, 3304.53)
+-- CP92 CLEAN EXACT ORIGINAL
+--
+-- Original LastZone logic preserved:
+--   CarSpawn -> wait(1) -> find PlayerName_Auto
+--   -> JumpCar -> wait(0.2)
+--   -> Checkpoint 92 -> wait(0.2)
+--   -> CFrame.new(16.58, 4, 3304.53)
+--   -> wait(1) -> OpenBoxClick x10 -> repeat
+--
+-- IMPORTANT FIX:
+-- Stops ALL old LastZone / Equip loops from previously executed versions
+-- before starting this script.
+
+-- =========================================================
+-- CLEANUP OLD RUNNING VERSIONS
+-- =========================================================
+
+_G.LastZone = false
+_G.Equip = false
+
+-- Old versions can still be inside:
+-- wait(1) + wait(0.2) + wait(0.2) + wait(1)
+-- Give them enough time to return to their while condition and terminate.
+task.wait(4)
+
+-- Session guard prevents duplicate loops from THIS version.
+_G.MegaRampCP92Session = (_G.MegaRampCP92Session or 0) + 1
+local SESSION = _G.MegaRampCP92Session
+
+-- =========================================================
+-- UI - same library/original layout
+-- =========================================================
 
 local CoreGui = game:GetService("CoreGui")
 local OldGui = CoreGui:FindFirstChild("ToraScript")
+
 if OldGui then
     OldGui:Destroy()
 end
@@ -18,8 +46,13 @@ local Library = loadstring(game:HttpGet(
 
 local Window = Library:CreateWindow("MEGA RAMP FOR SLIME")
 
-local function LastZone()
-    while _G.LastZone do
+-- =========================================================
+-- ORIGINAL LASTZONE LOGIC
+-- Only 68 -> 92 and final coordinates changed.
+-- =========================================================
+
+local function LastZone(mySession)
+    while _G.LastZone and _G.MegaRampCP92Session == mySession do
         wait()
 
         game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame =
@@ -28,22 +61,37 @@ local function LastZone()
         wait(1)
 
         for _, find in pairs(workspace:GetChildren()) do
-            -- IMPORTANT: this is how the ORIGINAL script identifies the spawned car.
-            -- It is PlayerName .. "_Auto", NOT just PlayerName.
+            if not _G.LastZone or _G.MegaRampCP92Session ~= mySession then
+                return
+            end
+
+            -- EXACT original car identification:
             if find.Name == game.Players.LocalPlayer.Name .. "_Auto" then
+
+                -- EXACT original first teleport:
                 find:SetPrimaryPartCFrame(workspace.Progetto.JumpCar.CFrame)
                 wait(0.2)
 
-                -- ONLY TARGET CHANGE #1: original was Checkpoints["68"]
-                find:SetPrimaryPartCFrame(workspace.Progetto.Checkpoints["92"].CFrame)
+                -- ONLY CHANGE #1:
+                -- Original: workspace.Progetto.Checkpoints["68"].CFrame
+                find:SetPrimaryPartCFrame(
+                    workspace.Progetto.Checkpoints["92"].CFrame
+                )
                 wait(0.2)
 
-                -- ONLY TARGET CHANGE #2: original was CFrame.new(-21, 3, 2101)
-                find:SetPrimaryPartCFrame(CFrame.new(16.58, 4, 3304.53))
+                -- ONLY CHANGE #2:
+                -- Original: CFrame.new(-21, 3, 2101)
+                find:SetPrimaryPartCFrame(
+                    CFrame.new(16.58, 4, 3304.53)
+                )
                 wait(1)
 
+                -- EXACT original reward calls:
                 for _ = 1, 10 do
-                    game:GetService("ReplicatedStorage").Remotes.OpenBoxClick:FireServer()
+                    game:GetService("ReplicatedStorage")
+                        .Remotes
+                        .OpenBoxClick
+                        :FireServer()
                 end
 
                 wait()
@@ -52,12 +100,24 @@ local function LastZone()
     end
 end
 
-local function Equip()
-    while _G.Equip do
-        game:GetService("ReplicatedStorage").Remotes.EquipBestInventory:FireServer()
+-- =========================================================
+-- ORIGINAL EQUIP BEST
+-- =========================================================
+
+local function Equip(mySession)
+    while _G.Equip and _G.MegaRampCP92Session == mySession do
+        game:GetService("ReplicatedStorage")
+            .Remotes
+            .EquipBestInventory
+            :FireServer()
+
         wait(2)
     end
 end
+
+-- =========================================================
+-- TOGGLES
+-- =========================================================
 
 Window:AddToggle({
     text = "Instant LastZone",
@@ -68,7 +128,11 @@ Window:AddToggle({
         print("LastZone: ", value)
 
         if value then
-            spawn(LastZone)
+            -- Make sure only one farm coroutine from this UI activation runs.
+            local mySession = _G.MegaRampCP92Session
+            spawn(function()
+                LastZone(mySession)
+            end)
         end
     end,
 })
@@ -82,7 +146,10 @@ Window:AddToggle({
         print("Equip: ", value)
 
         if value then
-            spawn(Equip)
+            local mySession = _G.MegaRampCP92Session
+            spawn(function()
+                Equip(mySession)
+            end)
         end
     end,
 })
