@@ -1,21 +1,14 @@
+-- MEGA RAMP FOR SLIME
+-- Reconstructed from the original obfuscated script.
+-- Original behavior preserved.
+-- ONLY farm target changes:
+--   Checkpoint "68" -> "92"
+--   CFrame.new(-21, 3, 2101) -> CFrame.new(16.58, 4, 3304.53)
 
--- FIXED x1,000,000 FARM
--- Keeps the recovered original flow, but extends checkpoint progression:
--- JumpCar -> 69 -> 70 -> ... -> 92 -> final x1M coordinate
--- Also waits for the player's car instead of repeatedly resetting at CarSpawn.
-
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
-
-local LocalPlayer = Players.LocalPlayer
-local Progetto = workspace:WaitForChild("Progetto")
-local Checkpoints = Progetto:WaitForChild("Checkpoints")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-
-local oldGui = CoreGui:FindFirstChild("ToraScript")
-if oldGui then
-    oldGui:Destroy()
+local OldGui = CoreGui:FindFirstChild("ToraScript")
+if OldGui then
+    OldGui:Destroy()
 end
 
 local Library = loadstring(game:HttpGet(
@@ -25,196 +18,45 @@ local Library = loadstring(game:HttpGet(
 
 local Window = Library:CreateWindow("MEGA RAMP FOR SLIME")
 
-local FINAL_CFRAME = CFrame.new(16.58, 4.00, 3304.53)
-local FIRST_EXTRA_CHECKPOINT = 69
-local LAST_CHECKPOINT = 92
-
--- Wait for the actual player vehicle. The old fixed wait(1) can miss it,
--- which causes the character to be sent to CarSpawn over and over.
-local function waitForPlayerCar(timeout)
-    local started = tick()
-
-    repeat
-        -- Original script checks root workspace children by exact player name.
-        for _, obj in ipairs(workspace:GetChildren()) do
-            if obj.Name == LocalPlayer.Name and obj:IsA("Model") then
-                return obj
-            end
-        end
-
-        -- Fallback in case the game now places the vehicle inside a folder/model.
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj.Name == LocalPlayer.Name and obj:IsA("Model") then
-                return obj
-            end
-        end
-
-        task.wait(0.10)
-    until not _G.LastZone or (tick() - started) >= timeout
-
-    return nil
-end
-
-local function preparePrimaryPart(car)
-    if car.PrimaryPart then
-        return true
-    end
-
-    local preferred = car:FindFirstChild("VehicleSeat", true)
-        or car:FindFirstChild("DriveSeat", true)
-        or car:FindFirstChildWhichIsA("VehicleSeat", true)
-        or car:FindFirstChildWhichIsA("Seat", true)
-        or car:FindFirstChildWhichIsA("BasePart", true)
-
-    if preferred and preferred:IsA("BasePart") then
-        car.PrimaryPart = preferred
-        return true
-    end
-
-    return false
-end
-
-local function moveCar(car, targetCFrame)
-    if not car or not car.Parent then
-        return false
-    end
-
-    if preparePrimaryPart(car) then
-        local ok = pcall(function()
-            car:SetPrimaryPartCFrame(targetCFrame)
-        end)
-        if ok then
-            return true
-        end
-    end
-
-    -- Fallback for models where SetPrimaryPartCFrame is unavailable/unstable.
-    return pcall(function()
-        car:PivotTo(targetCFrame)
-    end)
-end
-
 local function LastZone()
-    -- Prevent several workers being started by repeated toggle callbacks.
-    if _G.__LastZoneWorker then
-        return
-    end
-    _G.__LastZoneWorker = true
-
     while _G.LastZone do
-        local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        local root = character:FindFirstChild("HumanoidRootPart")
+        wait()
 
-        if not root then
-            root = character:WaitForChild("HumanoidRootPart", 5)
-        end
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame =
+            workspace.Progetto.CarSpawn.CFrame
 
-        if not root then
-            task.wait(0.5)
-            continue
-        end
+        wait(1)
 
-        -- ORIGINAL: go to the car spawn once per farm cycle.
-        root.CFrame = Progetto.CarSpawn.CFrame
+        for _, find in pairs(workspace:GetChildren()) do
+            -- IMPORTANT: this is how the ORIGINAL script identifies the spawned car.
+            -- It is PlayerName .. "_Auto", NOT just PlayerName.
+            if find.Name == game.Players.LocalPlayer.Name .. "_Auto" then
+                find:SetPrimaryPartCFrame(workspace.Progetto.JumpCar.CFrame)
+                wait(0.2)
 
-        -- FIX: wait until the car really exists instead of blindly waiting 1 sec.
-        local car = waitForPlayerCar(8)
+                -- ONLY TARGET CHANGE #1: original was Checkpoints["68"]
+                find:SetPrimaryPartCFrame(workspace.Progetto.Checkpoints["92"].CFrame)
+                wait(0.2)
 
-        if not _G.LastZone then
-            break
-        end
+                -- ONLY TARGET CHANGE #2: original was CFrame.new(-21, 3, 2101)
+                find:SetPrimaryPartCFrame(CFrame.new(16.58, 4, 3304.53))
+                wait(1)
 
-        if not car then
-            warn("[x1M] Player car was not found. Retrying...")
-            task.wait(0.5)
-            continue
-        end
-
-        -- ORIGINAL first car position.
-        if not moveCar(car, Progetto.JumpCar.CFrame) then
-            warn("[x1M] Could not move car to JumpCar")
-            task.wait(0.5)
-            continue
-        end
-
-        task.wait(0.2)
-
-        -- Requested extension: continue the checkpoints in order, 69 through 92.
-        local checkpointFailed = false
-
-        for checkpointNumber = FIRST_EXTRA_CHECKPOINT, LAST_CHECKPOINT do
-            if not _G.LastZone then
-                break
-            end
-
-            local checkpoint = Checkpoints:FindFirstChild(tostring(checkpointNumber))
-
-            if not checkpoint then
-                warn("[x1M] Missing checkpoint: " .. tostring(checkpointNumber))
-                checkpointFailed = true
-                break
-            end
-
-            local checkpointCFrame
-
-            if checkpoint:IsA("BasePart") then
-                checkpointCFrame = checkpoint.CFrame
-            elseif checkpoint:IsA("Model") then
-                checkpointCFrame = checkpoint:GetPivot()
-            else
-                local part = checkpoint:FindFirstChildWhichIsA("BasePart", true)
-                if part then
-                    checkpointCFrame = part.CFrame
+                for _ = 1, 10 do
+                    game:GetService("ReplicatedStorage").Remotes.OpenBoxClick:FireServer()
                 end
+
+                wait()
             end
-
-            if not checkpointCFrame or not moveCar(car, checkpointCFrame) then
-                warn("[x1M] Failed checkpoint: " .. tostring(checkpointNumber))
-                checkpointFailed = true
-                break
-            end
-
-            -- Give Touch/Checkpoint logic time to register each numbered checkpoint.
-            task.wait(0.12)
         end
-
-        if not _G.LastZone then
-            break
-        end
-
-        if checkpointFailed then
-            task.wait(0.5)
-            continue
-        end
-
-        -- Same final move as original, changed only to the x1,000,000 coordinate.
-        task.wait(0.2)
-        moveCar(car, FINAL_CFRAME)
-        task.wait(1)
-
-        -- ORIGINAL reward clicks.
-        for _ = 1, 10 do
-            Remotes.OpenBoxClick:FireServer()
-        end
-
-        task.wait()
     end
-
-    _G.__LastZoneWorker = false
 end
 
 local function Equip()
-    if _G.__EquipWorker then
-        return
-    end
-    _G.__EquipWorker = true
-
     while _G.Equip do
-        Remotes.EquipBestInventory:FireServer()
-        task.wait(2)
+        game:GetService("ReplicatedStorage").Remotes.EquipBestInventory:FireServer()
+        wait(2)
     end
-
-    _G.__EquipWorker = false
 end
 
 Window:AddToggle({
@@ -226,7 +68,7 @@ Window:AddToggle({
         print("LastZone: ", value)
 
         if value then
-            task.spawn(LastZone)
+            spawn(LastZone)
         end
     end,
 })
@@ -240,13 +82,9 @@ Window:AddToggle({
         print("Equip: ", value)
 
         if value then
-            task.spawn(Equip)
+            spawn(Equip)
         end
     end,
-})
-
-Window:AddLabel({
-    text = "CP 69 -> 92 | Target x1,000,000",
 })
 
 Window:AddLabel({
