@@ -1,314 +1,142 @@
--- MEGA RAMP FOR SLIME — РЕЖИМ 1 000 000 X
--- Версия 4.0 (ультимативная)
--- Анализирует карту, телепортирует по зонам, включает Noclip и супер-скорость
+-- АНАЛИЗАТОР ИГРЫ MEGA RAMP FOR SLIME
+-- Запусти, проедь один раз, потом скопируй вывод в консоли
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
 local RootPart = Character:WaitForChild("HumanoidRootPart")
 
--- === НАСТРОЙКИ ===
-local Settings = {
-    OneMillionMode = false,   -- главный тумблер
-    Noclip = true,
-    SuperSpeed = true,
-    SpeedValue = 999,
-    TeleportThroughZones = true,
-    ZoneDelay = 0.001,        -- задержка между телепортами (чем меньше, тем быстрее)
-    AutoCollect = true,
+-- Данные для сбора
+local logData = {
+    startTime = os.time(),
+    positions = {},
+    xChanges = {},
+    triggeredParts = {},
+    finalX = 0,
+    totalZones = 0,
 }
 
--- === NOCLIP ===
-local function setNoclip(state)
-    if not Character then return end
-    for _, part in ipairs(Character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = not state
-        end
-    end
-end
+local lastX = 0
+local lastPosition = nil
+local sampleInterval = 0.1 -- собираем позицию каждые 0.1 сек
+local timer = 0
 
--- === ПОИСК ЗОН ===
-local function findZones()
-    local zones = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local name = obj.Name:lower()
-            if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") or name:find("slime") then
-                table.insert(zones, obj)
-            end
-        end
-    end
-    -- Сортируем по оси Z (можно заменить на X, если рампа идёт по X)
-    table.sort(zones, function(a, b)
-        return a.Position.Z < b.Position.Z
-    end)
-    return zones
-end
-
--- === ТЕЛЕПОРТ ПО ЗОНАМ ===
-local function teleportThroughZones()
-    local zones = findZones()
-    if #zones == 0 then
-        print("[WARN] Зоны не найдены, используем супер-скорость.")
-        return
-    end
-    print("[INFO] Найдено зон: " .. #zones)
-    for i, zone in ipairs(zones) do
-        if not Settings.OneMillionMode then break end
-        local pos = zone.Position + Vector3.new(0, 2, 0) -- чуть выше, чтобы не застрять
-        RootPart.CFrame = CFrame.new(pos)
-        wait(Settings.ZoneDelay)
-        -- Обновляем GUI, чтобы показать прогресс
-        if i % 100 == 0 then
-            print("[PROGRESS] Пройдено зон: " .. i)
-        end
-    end
-    print("[DONE] Все зоны пройдены! X должен быть огромным.")
-end
-
--- === СУПЕР-СКОРОСТЬ ===
-local function applySuperSpeed()
-    if not Settings.SuperSpeed or not Settings.OneMillionMode then return end
-    local vel = RootPart.Velocity
-    local dir = RootPart.CFrame.LookVector
-    local newVel = dir * Settings.SpeedValue
-    RootPart.Velocity = Vector3.new(newVel.X, vel.Y, newVel.Z)
-end
-
--- === АВТО-СБОР (опционально) ===
-local function collectBonuses()
-    if not Settings.AutoCollect or not Settings.OneMillionMode then return end
-    -- просто проезжаем через все части с "coin" или "bonus" – они сами подберутся
-    for _, part in ipairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") and (part.Name:lower():find("coin") or part.Name:lower():find("bonus")) then
-            if (part.Position - RootPart.Position).Magnitude < 100 then
-                -- уже собрано при телепорте
-            end
-        end
-    end
-end
-
--- === ГЛАВНЫЙ ЦИКЛ ===
-RunService.Heartbeat:Connect(function()
-    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    if not Character then return end
-    Humanoid = Character:FindFirstChild("Humanoid")
-    RootPart = Character:FindFirstChild("HumanoidRootPart")
-    if not (Humanoid and RootPart) then return end
-
-    if Settings.OneMillionMode then
-        -- Noclip
-        if Settings.Noclip then
-            setNoclip(true)
-        end
-
-        -- Супер-скорость (если телепорт не работает)
-        applySuperSpeed()
-
-        -- Авто-сбор
-        collectBonuses()
-    else
-        -- Отключаем Noclip, если режим выключен
-        setNoclip(false)
-    end
-end)
-
--- === КНОПКА ДЛЯ ЗАПУСКА ТЕЛЕПОРТА ПО ЗОНАМ ===
--- (запускается отдельно, чтобы не мешать циклу)
-local function startZoneTeleport()
-    if not Settings.OneMillionMode then return end
-    if Settings.TeleportThroughZones then
-        teleportThroughZones()
-    end
-end
-
--- Можно запустить по команде или по таймеру, но сделаем по кнопке в GUI
-
--- === СОЗДАНИЕ КРАСИВОГО GUI ===
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-ScreenGui.ResetOnSpawn = false
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Parent = ScreenGui
-MainFrame.Size = UDim2.new(0, 420, 0, 550)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -275)
-MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
-MainFrame.BorderSizePixel = 2
-MainFrame.BorderColor3 = Color3.fromRGB(255, 0, 200)
-MainFrame.Active = true
-MainFrame.Draggable = true
-
--- Заголовок
-local Title = Instance.new("TextLabel")
-Title.Parent = MainFrame
-Title.Size = UDim2.new(1, 0, 0, 50)
-Title.BackgroundColor3 = Color3.fromRGB(255, 0, 200)
-Title.Text = "🚀 MEGA RAMP 1M EDITION"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextScaled = true
-Title.Font = Enum.Font.GothamBold
-
--- Кнопка закрытия
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Parent = MainFrame
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 10)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextScaled = true
-CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
-
--- Функция создания переключателя
-local function createToggle(parent, label, yPos, getter, setter)
-    local frame = Instance.new("Frame")
-    frame.Parent = parent
-    frame.Size = UDim2.new(1, -20, 0, 40)
-    frame.Position = UDim2.new(0, 10, 0, yPos)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-    frame.BorderSizePixel = 0
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Parent = frame
-    lbl.Size = UDim2.new(0.7, 0, 1, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = label
-    lbl.TextColor3 = Color3.fromRGB(200, 200, 255)
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.TextScaled = true
-    lbl.Font = Enum.Font.Gotham
-
-    local btn = Instance.new("TextButton")
-    btn.Parent = frame
-    btn.Size = UDim2.new(0, 70, 0, 28)
-    btn.Position = UDim2.new(0.72, 0, 0.5, -14)
-    btn.BackgroundColor3 = getter() and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(80, 80, 80)
-    btn.Text = getter() and "ON" or "OFF"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextScaled = true
-    btn.Font = Enum.Font.GothamBold
-
-    btn.MouseButton1Click:Connect(function()
-        local newVal = not getter()
-        setter(newVal)
-        btn.BackgroundColor3 = newVal and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(80, 80, 80)
-        btn.Text = newVal and "ON" or "OFF"
-        -- Если включили режим 1M, сразу активируем Noclip и начинаем телепорт
-        if label:find("1M") then
-            if newVal then
-                print("[1M] Режим активирован! Запускаем телепорт по зонам...")
-                startZoneTeleport()
-            else
-                print("[1M] Режим выключен.")
-                setNoclip(false)
-            end
-        end
-    end)
-
-    return frame
-end
-
--- Размещаем элементы
-local y = 60
-createToggle(MainFrame, "🔥 РЕЖИМ 1 000 000 X", y, function() return Settings.OneMillionMode end, function(v) Settings.OneMillionMode = v end)
-y = y + 50
-createToggle(MainFrame, "🌀 Noclip", y, function() return Settings.Noclip end, function(v) Settings.Noclip = v end)
-y = y + 50
-createToggle(MainFrame, "⚡ Супер-скорость", y, function() return Settings.SuperSpeed end, function(v) Settings.SuperSpeed = v end)
-y = y + 50
-createToggle(MainFrame, "📡 Телепорт по зонам", y, function() return Settings.TeleportThroughZones end, function(v) Settings.TeleportThroughZones = v end)
-y = y + 50
-createToggle(MainFrame, "💰 Авто-сбор", y, function() return Settings.AutoCollect end, function(v) Settings.AutoCollect = v end)
-
--- Ползунок скорости
-local speedFrame = Instance.new("Frame")
-speedFrame.Parent = MainFrame
-speedFrame.Size = UDim2.new(1, -20, 0, 40)
-speedFrame.Position = UDim2.new(0, 10, 0, y + 55)
-speedFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-speedFrame.BorderSizePixel = 0
-
-local speedLbl = Instance.new("TextLabel")
-speedLbl.Parent = speedFrame
-speedLbl.Size = UDim2.new(0.5, 0, 1, 0)
-speedLbl.BackgroundTransparency = 1
-speedLbl.Text = "Скорость: " .. Settings.SpeedValue
-speedLbl.TextColor3 = Color3.fromRGB(200, 200, 255)
-speedLbl.TextScaled = true
-speedLbl.Font = Enum.Font.Gotham
-
-local speedBox = Instance.new("TextBox")
-speedBox.Parent = speedFrame
-speedBox.Size = UDim2.new(0.3, 0, 1, 0)
-speedBox.Position = UDim2.new(0.6, 0, 0, 0)
-speedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-speedBox.Text = tostring(Settings.SpeedValue)
-speedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-speedBox.TextScaled = true
-speedBox.Font = Enum.Font.Gotham
-speedBox.ClearTextOnFocus = false
-speedBox.FocusLost:Connect(function()
-    local val = tonumber(speedBox.Text)
-    if val and val > 0 then
-        Settings.SpeedValue = val
-        speedLbl.Text = "Скорость: " .. val
-    else
-        speedBox.Text = tostring(Settings.SpeedValue)
-    end
-end)
-
--- Информация о текущем X (если удаётся прочитать)
-local xDisplay = Instance.new("TextLabel")
-xDisplay.Parent = MainFrame
-xDisplay.Size = UDim2.new(1, -20, 0, 30)
-xDisplay.Position = UDim2.new(0, 10, 0, y + 105)
-xDisplay.BackgroundColor3 = Color3.fromRGB(0, 0, 0, 0.5)
-xDisplay.Text = "X: 0"
-xDisplay.TextColor3 = Color3.fromRGB(0, 255, 200)
-xDisplay.TextScaled = true
-xDisplay.Font = Enum.Font.GothamBold
-
--- Обновляем X каждые 0.5 сек
-spawn(function()
-    while wait(0.5) do
-        local x = 0
-        -- Попытка прочитать X из GUI
-        for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") then
-                for _, child in ipairs(gui:GetDescendants()) do
-                    if child:IsA("TextLabel") or child:IsA("TextButton") then
-                        local txt = child.Text or ""
-                        local num = tonumber(txt:match("(%d+)"))
-                        if num and num > 100 then
-                            x = num
-                            break
-                        end
+-- Функция для получения текущего X (из GUI или leaderstats)
+local function getCurrentX()
+    -- 1. Пробуем из GUI
+    for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then
+            for _, child in ipairs(gui:GetDescendants()) do
+                if child:IsA("TextLabel") or child:IsA("TextButton") then
+                    local txt = child.Text or ""
+                    local num = tonumber(txt:match("(%d+)"))
+                    if num and num > 100 then
+                        return num
                     end
                 end
             end
         end
-        if x == 0 then
-            -- пробуем leaderstats
-            local stats = LocalPlayer:FindFirstChild("leaderstats")
-            if stats then
-                local xStat = stats:FindFirstChild("X")
-                if xStat and xStat:IsA("IntValue") then
-                    x = xStat.Value
+    end
+    -- 2. Пробуем из leaderstats
+    local stats = LocalPlayer:FindFirstChild("leaderstats")
+    if stats then
+        local xStat = stats:FindFirstChild("X")
+        if xStat and xStat:IsA("IntValue") then
+            return xStat.Value
+        end
+    end
+    return 0
+end
+
+-- Функция для записи позиции
+local function logPosition()
+    if not RootPart then return end
+    local pos = RootPart.Position
+    local x = getCurrentX()
+    table.insert(logData.positions, {
+        time = os.time(),
+        pos = {X = pos.X, Y = pos.Y, Z = pos.Z},
+        x = x
+    })
+    -- Если X изменился, записываем изменение
+    if x ~= lastX then
+        table.insert(logData.xChanges, {
+            time = os.time(),
+            from = lastX,
+            to = x,
+            pos = {X = pos.X, Y = pos.Y, Z = pos.Z}
+        })
+        lastX = x
+    end
+end
+
+-- Функция для записи триггеров (частей, которые мы пересекаем)
+local function checkTriggeredParts()
+    if not RootPart then return end
+    -- Ищем все части рядом (в радиусе 10)
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local dist = (part.Position - RootPart.Position).Magnitude
+            if dist < 10 then
+                local name = part.Name:lower()
+                if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") or name:find("slime") then
+                    -- Добавляем, если ещё не записывали
+                    local key = part.Name .. "_" .. tostring(part.Position)
+                    if not logData.triggeredParts[key] then
+                        logData.triggeredParts[key] = {
+                            name = part.Name,
+                            position = {X = part.Position.X, Y = part.Position.Y, Z = part.Position.Z},
+                            time = os.time()
+                        }
+                        logData.totalZones = logData.totalZones + 1
+                    end
                 end
             end
         end
-        xDisplay.Text = "Текущий X: " .. x
+    end
+end
+
+-- Главный цикл сбора
+RunService.Heartbeat:Connect(function(dt)
+    timer = timer + dt
+    if timer >= sampleInterval then
+        timer = 0
+        logPosition()
+        checkTriggeredParts()
     end
 end)
 
-print("✅ MEGA RAMP 1M EDITION загружен!")
-print("Включите 'РЕЖИМ 1 000 000 X' и наблюдайте за ростом X.")
+-- Остановка и вывод данных по команде "/stoplog" (или через 60 секунд автоматически)
+local function stopAndPrint()
+    logData.finalX = getCurrentX()
+    logData.endTime = os.time()
+    -- Формируем JSON-подобную строку (можно скопировать из консоли)
+    local json = "=== АНАЛИЗ ЗАВЕРШЁН ===\n"
+    json = json .. "Всего точек: " .. #logData.positions .. "\n"
+    json = json .. "Изменений X: " .. #logData.xChanges .. "\n"
+    json = json .. "Найдено зон/триггеров: " .. logData.totalZones .. "\n"
+    json = json .. "Финальный X: " .. logData.finalX .. "\n"
+    json = json .. "Список зон (имя, координаты):\n"
+    for key, data in pairs(logData.triggeredParts) do
+        json = json .. "  " .. data.name .. " -> " .. string.format("(%.1f, %.1f, %.1f)", data.position.X, data.position.Y, data.position.Z) .. "\n"
+    end
+    json = json .. "=== КОНЕЦ АНАЛИЗА ===\n"
+    print(json)
+    -- Также выводим полный лог позиций (если нужно – раскомментируй)
+    -- для краткости пока только сводку
+    warn("Скопируй этот вывод и отправь мне.")
+end
+
+-- Остановка по команде "/stoplog"
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Slash then
+        -- Ждём ввода текста (упрощённо – просто проверяем, не нажали ли /stoplog)
+        -- Но проще сделать таймер
+    end
+end)
+
+-- Авто-остановка через 60 секунд (если не остановили вручную)
+wait(60)
+stopAndPrint()
