@@ -1,4 +1,4 @@
-
+--[[
     MEGA RAMP FOR SLIME
     Custom multilingual UI wrapper
     Languages: RU / EN / UA
@@ -27,7 +27,7 @@ end
 -- ---------------------------------------------------------
 -- START ORIGINAL CP92 BACKEND UNCHANGED
 -- ---------------------------------------------------------
-task.spawn(function()
+task.spawn(function(...)
 -- CP92 redirect for the ORIGINAL obfuscated script.
 -- The VM logic is preserved. Its lookup of Checkpoints["68"] is redirected to real CP92.
 
@@ -614,3 +614,8 @@ end)
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or
        input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+print("[MEGA RAMP] Arc2play UI loaded | RU / EN / UA | Anti-AFK ON")
