@@ -1,25 +1,36 @@
 -- MEGA RAMP FOR SLIME
--- Stable x1,000,000 farm
--- Important: does NOT run through every multiplier pad.
--- It mirrors the original cycle: spawn -> find player's car -> move once -> wait -> repeat.
+-- x1,000,000 version using the ORIGINAL recovered LastZone cycle.
+-- Recovered original sequence:
+--   HRP -> CarSpawn
+--   wait(1)
+--   find workspace child named LocalPlayer.Name .. "_Auto"
+--   car -> Progetto.JumpCar.CFrame
+--   wait(0.2)
+--   car -> checkpoint CFrame
+--   wait(0.2)
+--   car -> final CFrame
+--   wait(1)
+--   OpenBoxClick:FireServer() x10
+--   repeat
+--
+-- The old obfuscated script hardcoded Checkpoints["68"] and CFrame.new(-21,3,2101).
+-- This build keeps the same cycle but resolves the x1,000,000 strip dynamically.
 
 local TARGET_MULTIPLIER = 1000000
-local AFTER_SPAWN_DELAY = 0.25
-local AFTER_MOVE_DELAY = 1.0
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
--- Remove old UI copy.
+-- Remove old Tora UI copy.
 local oldGui = CoreGui:FindFirstChild("ToraScript")
 if oldGui then
     oldGui:Destroy()
 end
 
--- Same UI library as the original script.
 local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/liebertsx/Tora-Library/main/src/librarynew",
     true
@@ -27,100 +38,79 @@ local Library = loadstring(game:HttpGet(
 
 local Window = Library:CreateWindow("MEGA RAMP FOR SLIME")
 
-local function parseMultiplier(text)
-    text = tostring(text or "")
+local function normalizeText(v)
+    return tostring(v or "")
         :upper()
         :gsub("%s+", "")
         :gsub(",", "")
         :gsub("%.", "")
+end
 
-    local n = text:match("X(%d+)")
+local function multiplierFromText(v)
+    local s = normalizeText(v)
+    local n = s:match("X(%d+)")
     return n and tonumber(n) or nil
 end
 
-local function basePartFromTextObject(obj)
-    local current = obj
+local function getProgetto()
+    return workspace:FindFirstChild("Progetto")
+end
 
-    for _ = 1, 10 do
-        if not current then
+local function partFromGui(guiObject)
+    local cur = guiObject
+
+    for _ = 1, 12 do
+        if not cur then
             return nil
         end
 
-        if current:IsA("SurfaceGui") or current:IsA("BillboardGui") then
-            local ok, adornee = pcall(function()
-                return current.Adornee
-            end)
-            if ok and adornee and adornee:IsA("BasePart") then
+        if cur:IsA("SurfaceGui") or cur:IsA("BillboardGui") then
+            local adornee = cur.Adornee
+            if adornee and adornee:IsA("BasePart") then
                 return adornee
             end
         end
 
-        if current:IsA("BasePart") then
-            return current
+        if cur:IsA("BasePart") then
+            return cur
         end
 
-        current = current.Parent
+        cur = cur.Parent
     end
 
     return nil
 end
 
--- Find ONLY the x1,000,000 pad.
-local function findTargetPad()
-    local bestPart = nil
+-- Locate the physical strip that displays x1,000,000.
+-- This is done once/cached, NOT every frame.
+local cachedTargetPart = nil
+local function findTargetPart()
+    if cachedTargetPart and cachedTargetPart.Parent then
+        return cachedTargetPart
+    end
 
-    for _, obj in ipairs(workspace:GetDescendants()) do
+    local progetto = getProgetto()
+    local searchRoot = progetto or workspace
+
+    for _, obj in ipairs(searchRoot:GetDescendants()) do
         if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
             local ok, text = pcall(function()
                 return obj.Text
             end)
 
-            if ok and parseMultiplier(text) == TARGET_MULTIPLIER then
-                local part = basePartFromTextObject(obj)
+            if ok and multiplierFromText(text) == TARGET_MULTIPLIER then
+                local part = partFromGui(obj)
                 if part then
+                    cachedTargetPart = part
+                    print("[x1M] Target strip:", part:GetFullName(), part.Position)
                     return part
                 end
             end
-        elseif obj:IsA("BasePart") and parseMultiplier(obj.Name) == TARGET_MULTIPLIER then
-            bestPart = obj
-        end
-    end
-
-    return bestPart
-end
-
-local function getCharacter()
-    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-end
-
--- This is taken from the behavior recovered from the original obfuscated script.
-local function movePlayerToCarSpawn()
-    local character = getCharacter()
-    local root = character:FindFirstChild("HumanoidRootPart")
-    local progetto = workspace:FindFirstChild("Progetto")
-    local carSpawn = progetto and progetto:FindFirstChild("CarSpawn")
-
-    if root and carSpawn and carSpawn:IsA("BasePart") then
-        root.CFrame = carSpawn.CFrame
-        return true
-    end
-
-    return false
-end
-
--- Original script scans workspace:GetChildren() and compares Name with LocalPlayer.Name.
-local function findPlayerCar()
-    for _, object in ipairs(workspace:GetChildren()) do
-        if object.Name == LocalPlayer.Name and object ~= LocalPlayer.Character then
-            return object
-        end
-    end
-
-    -- Small fallback for versions where the car is moved under a folder/model.
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if object.Name == LocalPlayer.Name and object ~= LocalPlayer.Character then
-            if object:IsA("Model") or object:IsA("BasePart") then
-                return object
+        elseif obj:IsA("BasePart") then
+            if multiplierFromText(obj.Name) == TARGET_MULTIPLIER then
+                cachedTargetPart = obj
+                print("[x1M] Target part by name:", obj:GetFullName(), obj.Position)
+                return obj
             end
         end
     end
@@ -128,105 +118,231 @@ local function findPlayerCar()
     return nil
 end
 
-local function targetCFrameForPad(part)
-    -- One destination only. Do not traverse intermediate multiplier pads.
-    -- A small height offset lets the vehicle contact/settle onto the pad.
-    return part.CFrame * CFrame.new(0, (part.Size.Y * 0.5) + 2.5, 0)
+-- ORIGINAL car naming recovered from the obfuscated script.
+local function findAutoCar()
+    local wantedName = LocalPlayer.Name .. "_Auto"
+
+    for _, object in ipairs(workspace:GetChildren()) do
+        if object.Name == wantedName then
+            return object
+        end
+    end
+
+    return nil
 end
 
-local function moveCarOnce(car, targetPart)
-    if not car or not targetPart then
+local function getObjectCFrame(obj)
+    if not obj then
+        return nil
+    end
+
+    if obj:IsA("BasePart") then
+        return obj.CFrame
+    end
+
+    if obj:IsA("Model") then
+        if obj.PrimaryPart then
+            return obj.PrimaryPart.CFrame
+        end
+
+        local p = obj:FindFirstChildWhichIsA("BasePart", true)
+        if p then
+            return p.CFrame
+        end
+    end
+
+    return nil
+end
+
+local function getObjectPosition(obj)
+    local cf = getObjectCFrame(obj)
+    return cf and cf.Position or nil
+end
+
+-- The old script uses Checkpoints["68"].
+-- For x1M we select the checkpoint physically closest to the x1M strip.
+local cachedCheckpoint = nil
+local function findNearestCheckpoint(targetPart)
+    if cachedCheckpoint and cachedCheckpoint.Parent then
+        return cachedCheckpoint
+    end
+
+    local progetto = getProgetto()
+    local checkpoints = progetto and progetto:FindFirstChild("Checkpoints")
+    if not checkpoints or not targetPart then
+        return nil
+    end
+
+    local targetPos = targetPart.Position
+    local best, bestDistance = nil, math.huge
+
+    for _, cp in ipairs(checkpoints:GetChildren()) do
+        local pos = getObjectPosition(cp)
+        if pos then
+            local distance = (pos - targetPos).Magnitude
+            if distance < bestDistance then
+                bestDistance = distance
+                best = cp
+            end
+        end
+    end
+
+    if best then
+        cachedCheckpoint = best
+        print("[x1M] Nearest checkpoint:", best.Name, "distance:", bestDistance)
+    end
+
+    return best
+end
+
+local function setModelCFrame(model, cf)
+    if not model or not cf then
         return false
     end
 
-    local cf = targetCFrameForPad(targetPart)
-
-    if car:IsA("Model") then
-        -- Prefer the same SetPrimaryPartCFrame style seen in the original script.
-        if car.PrimaryPart then
-            local ok = pcall(function()
-                car:SetPrimaryPartCFrame(cf)
-            end)
-            if ok then
-                return true
+    -- The ORIGINAL script specifically calls SetPrimaryPartCFrame.
+    if model:IsA("Model") then
+        if not model.PrimaryPart then
+            local firstPart = model:FindFirstChildWhichIsA("BasePart", true)
+            if firstPart then
+                pcall(function()
+                    model.PrimaryPart = firstPart
+                end)
             end
         end
 
-        -- Robust fallback for models without PrimaryPart.
-        local ok = pcall(function()
-            car:PivotTo(cf)
-        end)
-        if ok then
-            return true
-        end
-
-        local part = car:FindFirstChildWhichIsA("BasePart", true)
-        if part then
-            local ok2 = pcall(function()
-                part.CFrame = cf
+        if model.PrimaryPart then
+            local ok, err = pcall(function()
+                model:SetPrimaryPartCFrame(cf)
             end)
-            if ok2 then
-                return true
+            if not ok then
+                warn("[x1M] SetPrimaryPartCFrame error:", err)
             end
+            return ok
         end
-    elseif car:IsA("BasePart") then
-        car.CFrame = cf
-        return true
     end
 
     return false
 end
 
+local function targetFinalCFrame(targetPart)
+    -- Original final position was CFrame.new(-21, 3, 2101): identity rotation,
+    -- with the car center roughly 2.5 studs above the strip surface.
+    local p = targetPart.Position
+    local y = p.Y + (targetPart.Size.Y * 0.5) + 2.5
+    return CFrame.new(p.X, y, p.Z)
+end
+
+local function fireOpenBoxes()
+    local remote = Remotes:FindFirstChild("OpenBoxClick")
+    if not remote then
+        return
+    end
+
+    -- Exact count observed in the original LastZone cycle.
+    for _ = 1, 10 do
+        remote:FireServer()
+    end
+end
+
 local function LastZone()
     while _G.LastZone do
-        -- 1) Same beginning as the original: return player to CarSpawn.
-        movePlayerToCarSpawn()
-        task.wait(AFTER_SPAWN_DELAY)
+        task.wait() -- original cycle yields here
+
+        -- Resolve target BEFORE moving the player. If x1M cannot be found,
+        -- do not keep jerking the player around CarSpawn.
+        local targetPart = findTargetPart()
+        if not targetPart then
+            warn("[x1M] x1,000,000 strip not found. Player was NOT moved.")
+            task.wait(2)
+            continue
+        end
+
+        local progetto = getProgetto()
+        local carSpawn = progetto and progetto:FindFirstChild("CarSpawn")
+        local jumpCar = progetto and progetto:FindFirstChild("JumpCar")
+
+        local character = LocalPlayer.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+
+        if not (root and carSpawn and carSpawn:IsA("BasePart")) then
+            task.wait(0.5)
+            continue
+        end
+
+        -- ORIGINAL STEP 1
+        root.CFrame = carSpawn.CFrame
+
+        -- ORIGINAL DELAY (this was 1 second, not 0.25)
+        task.wait(1)
 
         if not _G.LastZone then
             break
         end
 
-        -- 2) Get the player's spawned vehicle.
-        local car = findPlayerCar()
-
-        -- 3) Find exactly x1,000,000. No intermediate-zone loop.
-        local target = findTargetPad()
-
-        if car and target then
-            moveCarOnce(car, target)
-        elseif not target then
-            warn("[x1M] x1,000,000 pad not found")
-        elseif not car then
-            warn("[x1M] Player car not found yet")
+        -- ORIGINAL lookup: <player name>_Auto
+        local car = findAutoCar()
+        if not car then
+            warn("[x1M] Waiting for car:", LocalPlayer.Name .. "_Auto")
+            task.wait(0.5)
+            continue
         end
 
-        -- 4) Give the game time to register the hit/reward/reset before next run.
-        task.wait(AFTER_MOVE_DELAY)
+        -- ORIGINAL STEP 2: car -> JumpCar.CFrame
+        if jumpCar and jumpCar:IsA("BasePart") then
+            setModelCFrame(car, jumpCar.CFrame)
+        else
+            warn("[x1M] Progetto.JumpCar not found")
+            task.wait(0.5)
+            continue
+        end
+
+        task.wait(0.2)
+
+        -- ORIGINAL STEP 3 was Checkpoints["68"].
+        -- We use the checkpoint nearest to the x1M strip instead.
+        local checkpoint = findNearestCheckpoint(targetPart)
+        local checkpointCF = getObjectCFrame(checkpoint)
+
+        if checkpointCF then
+            setModelCFrame(car, checkpointCF)
+        else
+            -- Safe fallback: use target strip itself rather than an unrelated checkpoint.
+            setModelCFrame(car, targetFinalCFrame(targetPart))
+        end
+
+        task.wait(0.2)
+
+        -- ORIGINAL STEP 4 was CFrame.new(-21, 3, 2101).
+        -- Same operation, but coordinates come from the x1M strip.
+        setModelCFrame(car, targetFinalCFrame(targetPart))
+
+        task.wait(1)
+
+        -- ORIGINAL reward/reset step.
+        fireOpenBoxes()
+
+        task.wait()
     end
 end
 
 local function Equip()
     while _G.Equip do
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        local remote = remotes and remotes:FindFirstChild("EquipBestInventory")
-
+        local remote = Remotes:FindFirstChild("EquipBestInventory")
         if remote then
             remote:FireServer()
         end
-
         task.wait(2)
     end
 end
 
 Window:AddToggle({
-    text = "Instant LastZone [x1M STABLE]",
-    flag = "toggle_x1m_stable",
+    text = "Instant LastZone [x1M ORIGINAL]",
+    flag = "toggle_x1m_original",
     state = false,
     callback = function(value)
         _G.LastZone = value
         print("LastZone x1M:", value)
-
         if value then
             task.spawn(LastZone)
         end
@@ -240,7 +356,6 @@ Window:AddToggle({
     callback = function(value)
         _G.Equip = value
         print("Equip:", value)
-
         if value then
             task.spawn(Equip)
         end
@@ -249,6 +364,10 @@ Window:AddToggle({
 
 Window:AddLabel({
     text = "Target: x1,000,000",
+})
+
+Window:AddLabel({
+    text = "Original cycle restored",
 })
 
 Window:AddLabel({
