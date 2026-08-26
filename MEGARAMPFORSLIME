@@ -1,130 +1,119 @@
 -- ==========================================
--- ROOBLOX CHECKPOINT LOG SCRIPT
+-- АВТОФАРМ СКОРОСТНОЙ (ТЕЛЕПОРТ ПО ЧЕКПОИНТАМ)
 -- ==========================================
 
-local Player = game.Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
 
--- 1. Создание UI (Окно Output)
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "OutputUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = PlayerGui
+-- Переменные
+local isFarming = true
+local currentIndex = 1
+local checkpoints = {}
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 400, 0, 300)
-MainFrame.Position = UDim2.new(0, 20, 0, 20)
-MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-MainFrame.BorderSizePixel = 1
-MainFrame.Parent = ScreenGui
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-Title.Text = "Output"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.Code
-Title.TextSize = 18
-Title.Parent = MainFrame
-
-local LogList = Instance.new("ScrollingFrame")
-LogList.Size = UDim2.new(1, -10, 1, -40)
-LogList.Position = UDim2.new(0, 5, 0, 35)
-LogList.BackgroundTransparency = 1
-LogList.BorderSizePixel = 0
-LogList.CanvasSize = UDim2.new(0,0,0,0)
-LogList.ScrollBarThickness = 5
-LogList.AutomaticCanvasSize = Enum.AutomaticSize.Y
-LogList.Parent = MainFrame
-
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.Parent = LogList
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
--- 2. Функция форматирования чисел (1.500 вместо 1500)
-local function FormatNum(num)
-    local formatted = tostring(num)
-    local k
-    while true do
-        formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1.%2")
-        if k == 0 then break end
-    end
-    return formatted
-end
-
--- 3. Функция добавления лога в UI
-local function AddLog(message)
-    local TextLabel = Instance.new("TextLabel")
-    TextLabel.Size = UDim2.new(1, 0, 0, 18)
-    TextLabel.BackgroundTransparency = 1
-    TextLabel.Text = message
-    TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TextLabel.Font = Enum.Font.Code
-    TextLabel.TextSize = 13
-    TextLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TextLabel.Parent = LogList
-    
-    -- Автопрокрутка вниз
-    task.wait(0.05)
-    LogList.CanvasPosition = Vector2.new(0, LogList.AbsoluteCanvasSize.Y)
-end
-
--- 4. Логика множителей X (как на скринах)
-local currentX = 5
-local currentCP = 1
-local luckEnded = false
-
-local function GetNextX()
-    if currentX < 100 then return currentX + 5
-    elseif currentX < 1000 then return currentX + 50
-    elseif currentX < 10000 then return currentX + 500
-    elseif currentX < 100000 then return currentX + 5000
-    elseif currentX < 500000 then return currentX + 50000
-    else return currentX end
-end
-
--- 5. Функция срабатывания при касании
-local function OnTouched(hit)
-    if luckEnded then return end
-    
-    -- Проверяем, что коснулся игрок или его транспорт (машина JumpCar)
-    local Character = Player.Character
-    if not Character then return end
-    
-    local IsPlayer = (hit.Parent == Character)
-    local IsVehicle = (hit.Parent:IsA("VehicleSeat") and hit.Parent:FindFirstChild("SeatWeld") and hit.Parent.SeatWeld.Part0 == Character)
-    
-    if IsPlayer or IsVehicle then
-        local nextX = GetNextX()
-        local nextCP = currentCP + 1
-        local formattedX = FormatNum(nextX)
-        
-        local msg = string.format("Checkpoint UI: %d x%s Label: x%s", currentCP, formattedX, formattedX)
-        AddLog(msg)
-        
-        currentX = nextX
-        currentCP = nextCP
-        
-        -- Финальный чекпоинт
-        if nextX >= 500000 then
-            AddLog("Luck UI end")
-            luckEnded = true
+-- Функция поиска машины (VehicleSeat), в которой сидит игрок
+local function GetVehicleSeat()
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("VehicleSeat") and v.Occupant == LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            return v
         end
     end
+    return nil
 end
 
--- 6. Поиск чекпоинтов в мире
-AddLog("-- System: Поиск чекпоинтов...")
-task.wait(0.5)
+-- Функция поиска всех чекпоинтов (по надписи X на GUI)
+local function FindCheckpoints()
+    table.clear(checkpoints)
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            -- Проверяем наличие SurfaceGui или BillboardGui с текстом X
+            local gui = v:FindFirstChildOfClass("SurfaceGui") or v:FindFirstChildOfClass("BillboardGui")
+            if gui then
+                local text = ""
+                if gui:FindFirstChildOfClass("TextLabel") then
+                    text = gui:FindFirstChildOfClass("TextLabel").Text
+                elseif gui:FindFirstChild("TextLabel") then
+                    text = gui.TextLabel.Text
+                end
+                -- Если в тексте есть "x" (например, x250)
+                if string.match(text, "x%d") or string.match(text, "X%d") then
+                    table.insert(checkpoints, v)
+                end
+            end
+        end
+    end
+    
+    -- Сортируем чекпоинты по их позиции (предполагаем, что трасса идет вдоль оси Z или X)
+    -- Если трасса другая, этот шаг можно поменять (например, сортировать по X, если едешь вправо)
+    table.sort(checkpoints, function(a, b)
+        return a.Position.Z < b.Position.Z -- Или a.Position.X, если трасса идет по X
+    end)
+    
+    return #checkpoints
+end
 
-local hookCount = 0
-for _, v in pairs(workspace:GetDescendants()) do
-    -- Ищем части с названием "Checkpoint" или "CP"
-    if v:IsA("BasePart") and (string.find(v.Name, "Checkpoint") or string.find(v.Name, "CP")) then
-        v.Touched:Connect(OnTouched)
-        hookCount = hookCount + 1
+-- Функция телепортации машины к чекпоинту
+local function TeleportToTarget(target)
+    local seat = GetVehicleSeat()
+    if seat then
+        local model = seat.Parent
+        -- Смотрим на чекпоинт, чтобы машина смотрела вперед
+        local newCF = CFrame.new(target.Position + Vector3.new(0, 1, 0), target.Position + Vector3.new(0, 1, 100))
+        -- Применяем позицию
+        model:PivotTo(newCF)
+        -- Сбрасываем скорость/физику, чтобы не падать
+        seat.Velocity = Vector3.zero
+        seat.AssemblyLinearVelocity = Vector3.zero
     end
 end
 
-AddLog("-- System: Найдено и подключено чекпоинтов: " .. hookCount)
-AddLog("-- System: Готово к работе!")
+-- Основной цикл
+task.spawn(function()
+    while isFarming do
+        -- Ищем чекпоинты (обновляем, если они только заспавнились)
+        if #checkpoints == 0 then
+            FindCheckpoints()
+            task.wait(1)
+        else
+            local target = checkpoints[currentIndex]
+            
+            if target and target.Parent then
+                -- Телепортируем к цели
+                TeleportToTarget(target)
+                -- Выводим в консоль (как в твоем Output)
+                print("Checkpoint UI: " .. currentIndex .. " x" .. currentIndex * 5 .. " Label: x" .. currentIndex * 5)
+                
+                -- Переходим к следующему
+                currentIndex = currentIndex + 1
+                
+                -- Если дошли до конца, начинаем сначала (фарм бесконечный)
+                if currentIndex > #checkpoints then
+                    currentIndex = 1
+                    task.wait(2) -- Небольшая пауза, если трасса огромная
+                end
+            else
+                -- Если какой-то чекпоинт удалили, идем дальше
+                currentIndex = currentIndex + 1
+                if currentIndex > #checkpoints then currentIndex = 1 end
+            end
+        end
+        
+        task.wait(0.1) -- Скорость фарма (0.1 сек на платформу). Поставь 0.05, если игра успевает засчитывать быстрее.
+    end
+end)
+
+-- Управление: Нажми F, чтобы включить/выключить автофарм
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.F then
+        isFarming = not isFarming
+        print("Автофарм: " .. (isFarming and "ВКЛЮЧЕН" or "ВЫКЛЮЧЕН"))
+    end
+end)
+
+-- Стартовый вывод
+print("Скрипт запущен. Ищу чекпоинты...")
+FindCheckpoints()
+print("Найдено чекпоинтов: " .. #checkpoints .. ". Нажми F для вкл/выкл.")
