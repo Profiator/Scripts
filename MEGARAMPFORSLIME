@@ -94,78 +94,91 @@ for _, obj in ipairs(toraGui:GetDescendants()) do
 end
 
 -- ---------------------------------------------------------
--- FIND & CONTROL ORIGINAL TOGGLES
+-- FIND & CONTROL ORIGINAL TORA TOGGLES
 -- ---------------------------------------------------------
+-- Tora-Library implements toggles as TextLabels with an InputBegan
+-- connection (not TextButtons). We therefore invoke the same Lua
+-- InputBegan callback that a real mouse click would invoke.
 
-local function findControlByText(searchText)
-    for _, textObj in ipairs(toraGui:GetDescendants()) do
-        if (textObj:IsA("TextLabel") or textObj:IsA("TextButton")) and
-           string.find(string.lower(textObj.Text or ""), string.lower(searchText), 1, true) then
+local function trim(s)
+    return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+end
 
-            -- Search the label/button itself and its parents for a GuiButton.
-            local node = textObj
-            for _ = 1, 5 do
-                if not node then break end
-
-                if node:IsA("GuiButton") then
-                    return node
-                end
-
-                for _, child in ipairs(node:GetDescendants()) do
-                    if child:IsA("GuiButton") then
-                        return child
-                    end
-                end
-
-                node = node.Parent
-            end
+local function findToraToggleLabel(exactText)
+    for _, obj in ipairs(toraGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and trim(obj.Text) == exactText then
+            return obj
         end
     end
     return nil
 end
 
-local originalLastZone = findControlByText("Instant LastZone")
-local originalEquipBest = findControlByText("Equip Best")
+local originalLastZone = findToraToggleLabel("Instant LastZone")
+local originalEquipBest = findToraToggleLabel("Equip Best")
 
-local function fireGuiButton(button)
-    if not button then
-        return false, "control not found"
+print("[MEGA RAMP] Backend controls:",
+    "LastZone =", originalLastZone and "FOUND" or "MISSING",
+    "EquipBest =", originalEquipBest and "FOUND" or "MISSING")
+
+local fakeMouseInput = {
+    UserInputType = Enum.UserInputType.MouseButton1
+}
+
+local function triggerToraToggle(label)
+    if not label then
+        return false, "original toggle label not found"
     end
 
-    -- Executor-friendly methods, best first.
+    -- Best method for executor environments:
+    -- execute the Lua connections attached by Tora's createToggle().
+    if typeof(getconnections) == "function" then
+        local ok, connections = pcall(function()
+            return getconnections(label.InputBegan)
+        end)
+
+        if ok and connections then
+            local fired = false
+
+            for _, connection in ipairs(connections) do
+                local didFire = false
+
+                if connection.Function then
+                    didFire = pcall(function()
+                        connection.Function(fakeMouseInput)
+                    end)
+                elseif connection.Fire then
+                    didFire = pcall(function()
+                        connection:Fire(fakeMouseInput)
+                    end)
+                end
+
+                if didFire then
+                    fired = true
+                end
+            end
+
+            if fired then
+                return true
+            end
+        end
+    end
+
+    -- Fallback used by some executors.
     if typeof(firesignal) == "function" then
         local ok = pcall(function()
-            firesignal(button.MouseButton1Click)
+            firesignal(label.InputBegan, fakeMouseInput)
         end)
-        if ok then return true end
 
-        ok = pcall(function()
-            firesignal(button.Activated)
-        end)
-        if ok then return true end
-    end
-
-    if typeof(getconnections) == "function" then
-        local ok, connections = pcall(getconnections, button.MouseButton1Click)
-        if ok and connections then
-            for _, connection in ipairs(connections) do
-                pcall(function()
-                    if connection.Fire then
-                        connection:Fire()
-                    elseif connection.Function then
-                        connection.Function()
-                    end
-                end)
-            end
+        if ok then
             return true
         end
     end
 
-    return false, "executor has no firesignal/getconnections"
+    return false, "executor cannot invoke Tora InputBegan"
 end
 
--- Hide only the original visual interface.
--- Its instances/events remain alive so we can control its toggles.
+-- Hide only the original visual interface AFTER keeping references to
+-- its toggle labels. Its Lua signal connections remain alive.
 if toraGui:IsA("ScreenGui") then
     toraGui.Enabled = false
 else
@@ -520,24 +533,30 @@ local function updateLanguage()
 end
 
 autoToggle.MouseButton1Click:Connect(function()
-    local ok, err = fireGuiButton(originalLastZone)
+    local ok, err = triggerToraToggle(originalLastZone)
+
     if not ok then
-        warn("[MEGA RAMP] " .. tostring(err))
+        warn("[MEGA RAMP] AutoFarm bridge error:", err)
         return
     end
 
-    autoFarmState = not autoFarmState
+    -- The ORIGINAL callback owns _G.LastZone.
+    task.wait()
+    autoFarmState = (_G.LastZone == true)
     renderAuto(autoFarmState)
 end)
 
 equipToggle.MouseButton1Click:Connect(function()
-    local ok, err = fireGuiButton(originalEquipBest)
+    local ok, err = triggerToraToggle(originalEquipBest)
+
     if not ok then
-        warn("[MEGA RAMP] " .. tostring(err))
+        warn("[MEGA RAMP] EquipBest bridge error:", err)
         return
     end
 
-    equipState = not equipState
+    -- The ORIGINAL callback owns _G.Equip.
+    task.wait()
+    equipState = (_G.Equip == true)
     renderEquip(equipState)
 end)
 
