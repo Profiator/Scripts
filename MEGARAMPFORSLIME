@@ -1,5 +1,5 @@
--- АНАЛИЗАТОР ИГРЫ MEGA RAMP FOR SLIME
--- Запусти, проедь один раз, потом скопируй вывод в консоли
+-- АНАЛИЗАТОР ДЛЯ MEGA RAMP
+-- Запустите, проедите один раз, скопируйте вывод в консоли
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -7,136 +7,83 @@ local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local RootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Данные для сбора
-local logData = {
-    startTime = os.time(),
+local data = {
     positions = {},
+    zones = {},
     xChanges = {},
-    triggeredParts = {},
     finalX = 0,
-    totalZones = 0,
+    startTime = os.time()
 }
 
-local lastX = 0
-local lastPosition = nil
-local sampleInterval = 0.1 -- собираем позицию каждые 0.1 сек
-local timer = 0
-
--- Функция для получения текущего X (из GUI или leaderstats)
+-- Функция получения текущего X (из GUI или leaderstats)
 local function getCurrentX()
-    -- 1. Пробуем из GUI
     for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
         if gui:IsA("ScreenGui") then
             for _, child in ipairs(gui:GetDescendants()) do
                 if child:IsA("TextLabel") or child:IsA("TextButton") then
                     local txt = child.Text or ""
                     local num = tonumber(txt:match("(%d+)"))
-                    if num and num > 100 then
-                        return num
-                    end
+                    if num and num > 100 then return num end
                 end
             end
         end
     end
-    -- 2. Пробуем из leaderstats
     local stats = LocalPlayer:FindFirstChild("leaderstats")
     if stats then
         local xStat = stats:FindFirstChild("X")
-        if xStat and xStat:IsA("IntValue") then
-            return xStat.Value
-        end
+        if xStat and xStat:IsA("IntValue") then return xStat.Value end
     end
     return 0
 end
 
--- Функция для записи позиции
-local function logPosition()
-    if not RootPart then return end
-    local pos = RootPart.Position
-    local x = getCurrentX()
-    table.insert(logData.positions, {
-        time = os.time(),
-        pos = {X = pos.X, Y = pos.Y, Z = pos.Z},
-        x = x
-    })
-    -- Если X изменился, записываем изменение
-    if x ~= lastX then
-        table.insert(logData.xChanges, {
-            time = os.time(),
-            from = lastX,
-            to = x,
-            pos = {X = pos.X, Y = pos.Y, Z = pos.Z}
-        })
-        lastX = x
-    end
-end
+local lastX = 0
+local timer = 0
 
--- Функция для записи триггеров (частей, которые мы пересекаем)
-local function checkTriggeredParts()
-    if not RootPart then return end
-    -- Ищем все части рядом (в радиусе 10)
-    for _, part in ipairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local dist = (part.Position - RootPart.Position).Magnitude
-            if dist < 10 then
-                local name = part.Name:lower()
-                if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") or name:find("slime") then
-                    -- Добавляем, если ещё не записывали
-                    local key = part.Name .. "_" .. tostring(part.Position)
-                    if not logData.triggeredParts[key] then
-                        logData.triggeredParts[key] = {
-                            name = part.Name,
-                            position = {X = part.Position.X, Y = part.Position.Y, Z = part.Position.Z},
-                            time = os.time()
-                        }
-                        logData.totalZones = logData.totalZones + 1
+-- Сбор данных
+RunService.Heartbeat:Connect(function(dt)
+    timer = timer + dt
+    if timer >= 0.1 then
+        timer = 0
+        if not RootPart then return end
+        local pos = RootPart.Position
+        local x = getCurrentX()
+        table.insert(data.positions, {x = pos.X, y = pos.Y, z = pos.Z, time = os.time(), xVal = x})
+        if x ~= lastX then
+            table.insert(data.xChanges, {from = lastX, to = x, pos = {x = pos.X, y = pos.Y, z = pos.Z}})
+            lastX = x
+        end
+        -- Поиск зон рядом
+        for _, part in ipairs(workspace:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local dist = (part.Position - RootPart.Position).Magnitude
+                if dist < 15 then
+                    local name = part.Name:lower()
+                    if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") then
+                        local key = part.Name .. "_" .. tostring(part.Position)
+                        if not data.zones[key] then
+                            data.zones[key] = {name = part.Name, pos = {x = part.Position.X, y = part.Position.Y, z = part.Position.Z}}
+                        end
                     end
                 end
             end
         end
     end
-end
-
--- Главный цикл сбора
-RunService.Heartbeat:Connect(function(dt)
-    timer = timer + dt
-    if timer >= sampleInterval then
-        timer = 0
-        logPosition()
-        checkTriggeredParts()
-    end
 end)
 
--- Остановка и вывод данных по команде "/stoplog" (или через 60 секунд автоматически)
-local function stopAndPrint()
-    logData.finalX = getCurrentX()
-    logData.endTime = os.time()
-    -- Формируем JSON-подобную строку (можно скопировать из консоли)
-    local json = "=== АНАЛИЗ ЗАВЕРШЁН ===\n"
-    json = json .. "Всего точек: " .. #logData.positions .. "\n"
-    json = json .. "Изменений X: " .. #logData.xChanges .. "\n"
-    json = json .. "Найдено зон/триггеров: " .. logData.totalZones .. "\n"
-    json = json .. "Финальный X: " .. logData.finalX .. "\n"
-    json = json .. "Список зон (имя, координаты):\n"
-    for key, data in pairs(logData.triggeredParts) do
-        json = json .. "  " .. data.name .. " -> " .. string.format("(%.1f, %.1f, %.1f)", data.position.X, data.position.Y, data.position.Z) .. "\n"
-    end
-    json = json .. "=== КОНЕЦ АНАЛИЗА ===\n"
-    print(json)
-    -- Также выводим полный лог позиций (если нужно – раскомментируй)
-    -- для краткости пока только сводку
-    warn("Скопируй этот вывод и отправь мне.")
+-- Авто-остановка через 90 секунд (или вручную командой /stoplog)
+wait(90)
+data.finalX = getCurrentX()
+data.endTime = os.time()
+
+-- Вывод отчёта
+print("=== АНАЛИЗ ЗАВЕРШЁН ===")
+print("Всего точек: " .. #data.positions)
+print("Изменений X: " .. #data.xChanges)
+print("Найдено зон: " .. #data.zones)
+print("Финальный X: " .. data.finalX)
+print("\nСПИСОК ЗОН (имя и координаты):")
+for key, zone in pairs(data.zones) do
+    print(string.format("  %s -> (%.1f, %.1f, %.1f)", zone.name, zone.pos.x, zone.pos.y, zone.pos.z))
 end
-
--- Остановка по команде "/stoplog"
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.Slash then
-        -- Ждём ввода текста (упрощённо – просто проверяем, не нажали ли /stoplog)
-        -- Но проще сделать таймер
-    end
-end)
-
--- Авто-остановка через 60 секунд (если не остановили вручную)
-wait(60)
-stopAndPrint()
+print("=== КОНЕЦ ===")
+warn("Скопируйте этот вывод и отправьте мне.")
