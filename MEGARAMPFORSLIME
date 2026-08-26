@@ -1,144 +1,266 @@
 -- ================================================================
--- 100% ДЕОБФУСКАТОР ДЛЯ ЛЮБОГО СКРИПТА LUAOBFUSCATOR
--- Этот скрипт выполняет обфусцированный код и перехватывает результат
+-- ПОЛНЫЙ АВТОМАТИЧЕСКИЙ ДЕОБФУСКАТОР С ГРАФИЧЕСКИМ ОКНОМ В ИГРЕ
+-- Версия 1.0 (для XENO и других инжекторов)
+-- После запуска появится окно с расшифрованным кодом.
 -- ================================================================
 
--- Функция для безопасного выполнения и перехвата
-local function deobfuscate(encodedScript)
-    -- Создаём изолированную среду
-    local env = {
-        print = function(...)
-            local args = {...}
-            for i, v in ipairs(args) do
-                if type(v) == "string" then
-                    io.write(v .. "\n")  -- выводим в консоль
-                else
-                    io.write(tostring(v) .. "\n")
-                end
-            end
-        end,
-        warn = function(...) print("WARN:", ...) end,
-        error = function(...) print("ERROR:", ...) end,
-        pcall = pcall,
-        task = task or {wait = function() end},
-        game = game or {},
-        workspace = workspace or {},
-        players = players or {},
-        ReplicatedStorage = ReplicatedStorage or {},
-        Instance = Instance,
-        Vector3 = Vector3,
-        CFrame = CFrame,
-        Color3 = Color3,
-        TweenService = TweenService,
-        GuiService = GuiService,
-        VirtualInputManager = VirtualInputManager,
-        -- добавляем все стандартные библиотеки
-        table = table,
-        string = string,
-        math = math,
-        bit32 = bit32,
-        _G = {},
-        getfenv = function() return env end,
-        setfenv = function(_, env) return env end,
-        loadstring = function(s) return loadstring(s, nil, env) end,
-        getmetatable = getmetatable,
-        setmetatable = setmetatable,
-        rawget = rawget,
-        rawset = rawset,
-        type = type,
-        tostring = tostring,
-        tonumber = tonumber,
-        unpack = unpack,
-        select = select,
-        pairs = pairs,
-        ipairs = ipairs,
-        next = next,
-        assert = assert,
-        require = function(x) 
-            print("require called with:", x)
-            return {}
-        end,
-    }
-    env._ENV = env
-    env._G = env
+-- 1. Перехватываем стандартные функции
+local oldPrint = print
+local oldWarn = warn
+local oldLoadstring = loadstring
+local oldHttpGet = game.HttpGet
 
-    -- Переопределяем загрузку строк, чтобы перехватывать динамический код
-    local originalLoadstring = loadstring
-    env.loadstring = function(s, chunkname)
-        print("[LOADSTRING] Загружен код:")
-        print(s)
-        return originalLoadstring(s, chunkname, env)
-    end
+-- Буфер для сбора всего вывода
+local outputBuffer = {}
+local function addToBuffer(str)
+    table.insert(outputBuffer, str)
+end
 
-    -- Переопределяем print, чтобы он выводил в наш лог
-    local function customPrint(...)
-        local args = {...}
-        local output = {}
-        for i, v in ipairs(args) do
-            if type(v) == "string" then
-                table.insert(output, v)
-            else
-                table.insert(output, tostring(v))
-            end
-        end
-        io.write(table.concat(output, "\t") .. "\n")
-    end
-    env.print = customPrint
-    env.warn = customPrint
-
-    -- Выполняем скрипт
-    local func, err = loadstring(encodedScript, "deobfuscated", env)
-    if not func then
-        print("Ошибка загрузки скрипта:", err)
-        return
-    end
-
-    -- Устанавливаем окружение
-    setfenv(func, env)
-
-    -- Выполняем и получаем результат
-    local success, result = pcall(func)
-    if not success then
-        print("Ошибка выполнения:", result)
-        return
-    end
-
-    -- Выводим результат
-    print("=== РЕЗУЛЬТАТ ВЫПОЛНЕНИЯ ===")
-    if type(result) == "function" then
-        -- Если результат - функция, пытаемся получить её исходник
-        local info = debug.getinfo(result, "S")
-        if info and info.source then
-            print("Функция создана из:", info.source)
-        end
-        -- Можно также попытаться дизассемблировать, но это сложно
-        print("Получена функция:", tostring(result))
-        -- Попытка вызвать её с пустыми аргументами для получения дальнейшего кода
-        local success2, res2 = pcall(function()
-            return result()
-        end)
-        if success2 then
-            print("Результат вызова функции:")
-            print(res2)
-        else
-            print("Вызов функции вернул ошибку:", res2)
-        end
-    else
-        print(result)
-    end
-
-    -- Также выводим все глобальные переменные, которые появились в среде
-    print("=== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===")
-    for k, v in pairs(env) do
-        if type(v) ~= "function" and type(v) ~= "table" and k ~= "_G" and k ~= "_ENV" then
-            print(k .. " = " .. tostring(v))
-        end
+-- Переопределяем print
+print = function(...)
+    local args = {...}
+    for _, v in ipairs(args) do
+        local str = tostring(v)
+        addToBuffer("[PRINT] " .. str)
+        oldPrint("[DECODED] " .. str)
     end
 end
 
--- Теперь загружаем твой обфусцированный скрипт
-local scriptUrl = "https://raw.githubusercontent.com/gumanba/Scripts/main/MEGARAMPFORSLIME"
-local encodedCode = game:HttpGet(scriptUrl)
+-- Переопределяем warn
+warn = function(...)
+    local args = {...}
+    for _, v in ipairs(args) do
+        local str = tostring(v)
+        addToBuffer("[WARN] " .. str)
+        oldWarn("[DECODED WARN] " .. str)
+    end
+end
 
--- Запускаем деобфускацию
-deobfuscate(encodedCode)
+-- Перехватываем loadstring
+loadstring = function(s, chunkname)
+    addToBuffer("[LOADSTRING] Блок кода:\n" .. s)
+    oldPrint("[LOADSTRING] Блок кода:\n" .. s)
+    return oldLoadstring(s, chunkname)
+end
+
+-- Перехватываем game:HttpGet
+game.HttpGet = function(self, url, ...)
+    addToBuffer("[HTTPGET] Запрос: " .. url)
+    oldPrint("[HTTPGET] Запрос: " .. url)
+    local content = oldHttpGet(self, url, ...)
+    addToBuffer("[HTTPGET] Получено байт: " .. #content)
+    oldPrint("[HTTPGET] Получено байт: " .. #content)
+    return content
+end
+
+-- 2. Загружаем целевой скрипт
+local targetUrl = "https://raw.githubusercontent.com/gumanba/Scripts/main/MEGARAMPFORSLIME"
+local scriptCode = game:HttpGet(targetUrl)
+
+addToBuffer("=== ОРИГИНАЛЬНЫЙ КОД (сырой) ===")
+addToBuffer(scriptCode)
+oldPrint("=== ОРИГИНАЛЬНЫЙ КОД (сырой) ===")
+oldPrint(scriptCode)
+
+-- 3. Выполняем скрипт с перехватом
+addToBuffer("=== ЗАПУСК СКРИПТА ===")
+oldPrint("=== ЗАПУСК СКРИПТА ===")
+
+local func, err = loadstring(scriptCode)
+if func then
+    local success, result = pcall(func)
+    if success then
+        addToBuffer("=== ВЫПОЛНЕНИЕ УСПЕШНО ===")
+        oldPrint("=== ВЫПОЛНЕНИЕ УСПЕШНО ===")
+        if type(result) == "function" then
+            addToBuffer("Получена функция: " .. tostring(result))
+            oldPrint("Получена функция: " .. tostring(result))
+            local success2, res2 = pcall(result)
+            if success2 then
+                addToBuffer("Результат вызова функции: " .. tostring(res2))
+                oldPrint("Результат вызова функции: " .. tostring(res2))
+            else
+                addToBuffer("Ошибка вызова функции: " .. tostring(res2))
+                oldPrint("Ошибка вызова функции: " .. tostring(res2))
+            end
+        else
+            addToBuffer("Результат: " .. tostring(result))
+            oldPrint("Результат: " .. tostring(result))
+        end
+    else
+        addToBuffer("Ошибка выполнения: " .. tostring(result))
+        oldPrint("Ошибка выполнения: " .. tostring(result))
+    end
+else
+    addToBuffer("Ошибка загрузки: " .. tostring(err))
+    oldPrint("Ошибка загрузки: " .. tostring(err))
+end
+
+addToBuffer("=== ВЫПОЛНЕНИЕ ЗАВЕРШЕНО ===")
+oldPrint("=== ВЫПОЛНЕНИЕ ЗАВЕРШЕНО ===")
+
+-- 4. Собираем итоговый текст
+local fullOutput = table.concat(outputBuffer, "\n")
+_G.DECODED_OUTPUT = fullOutput
+
+-- 5. Создаём GUI (окно поверх игры)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DeobfuscatorGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+-- Фоновое затемнение (опционально)
+local background = Instance.new("Frame")
+background.Size = UDim2.new(1, 0, 1, 0)
+background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+background.BackgroundTransparency = 0.5
+background.Parent = screenGui
+
+-- Основное окно
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 800, 0, 600)
+mainFrame.Position = UDim2.new(0.5, -400, 0.5, -300)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BorderSizePixel = 2
+mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
+mainFrame.Parent = screenGui
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+-- Заголовок
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+title.Text = "🔓 РАСШИФРОВАННЫЙ КОД"
+title.TextColor3 = Color3.fromRGB(0, 0, 0)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+-- Кнопка закрытия
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 40, 0, 40)
+closeBtn.Position = UDim2.new(1, -45, 0, 0)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextScaled = true
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = mainFrame
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Кнопка копирования
+local copyBtn = Instance.new("TextButton")
+copyBtn.Size = UDim2.new(0, 120, 0, 30)
+copyBtn.Position = UDim2.new(0, 20, 0, 50)
+copyBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+copyBtn.Text = "📋 КОПИРОВАТЬ"
+copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyBtn.TextScaled = true
+copyBtn.Font = Enum.Font.GothamBold
+copyBtn.Parent = mainFrame
+copyBtn.MouseButton1Click:Connect(function()
+    local success, err = pcall(function()
+        setclipboard(fullOutput)
+    end)
+    if success then
+        copyBtn.Text = "✅ СКОПИРОВАНО!"
+        task.wait(2)
+        copyBtn.Text = "📋 КОПИРОВАТЬ"
+    else
+        copyBtn.Text = "❌ ОШИБКА"
+        task.wait(2)
+        copyBtn.Text = "📋 КОПИРОВАТЬ"
+    end
+end)
+
+-- Кнопка сохранения в файл
+local saveBtn = Instance.new("TextButton")
+saveBtn.Size = UDim2.new(0, 150, 0, 30)
+saveBtn.Position = UDim2.new(0, 160, 0, 50)
+saveBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
+saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveBtn.TextScaled = true
+saveBtn.Font = Enum.Font.GothamBold
+saveBtn.Parent = mainFrame
+saveBtn.MouseButton1Click:Connect(function()
+    local success, err = pcall(function()
+        writefile("123/decoded_script.lua", fullOutput)
+    end)
+    if success then
+        saveBtn.Text = "✅ СОХРАНЕНО!"
+        task.wait(2)
+        saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+    else
+        saveBtn.Text = "❌ ОШИБКА"
+        task.wait(2)
+        saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+    end
+end)
+
+-- Кнопка "Закрыть и удалить GUI"
+local closeAllBtn = Instance.new("TextButton")
+closeAllBtn.Size = UDim2.new(0, 150, 0, 30)
+closeAllBtn.Position = UDim2.new(1, -170, 0, 50)
+closeAllBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+closeAllBtn.Text = "❌ ЗАКРЫТЬ ОКНО"
+closeAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeAllBtn.TextScaled = true
+closeAllBtn.Font = Enum.Font.GothamBold
+closeAllBtn.Parent = mainFrame
+closeAllBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Область с прокруткой для текста
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -20, 1, -110)
+scrollFrame.Position = UDim2.new(0, 10, 0, 95)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+scrollFrame.BorderSizePixel = 1
+scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+scrollFrame.Parent = mainFrame
+scrollFrame.ScrollBarThickness = 12
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+-- Текстовое поле внутри скролл-фрейма
+local textLabel = Instance.new("TextLabel")
+textLabel.Size = UDim2.new(1, -10, 0, 0)
+textLabel.BackgroundTransparency = 1
+textLabel.Text = fullOutput
+textLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
+textLabel.TextXAlignment = Enum.TextXAlignment.Left
+textLabel.TextYAlignment = Enum.TextYAlignment.Top
+textLabel.TextWrapped = true
+textLabel.TextScaled = false
+textLabel.Font = Enum.Font.Code
+textLabel.Parent = scrollFrame
+
+-- Автоподбор высоты текста
+local function updateTextHeight()
+    local lineCount = #fullOutput:split("\n")
+    local lineHeight = 16
+    local height = lineCount * lineHeight + 20
+    textLabel.Size = UDim2.new(1, -10, 0, height)
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, height)
+end
+updateTextHeight()
+
+-- Информационная строка внизу
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, 0, 0, 20)
+infoLabel.Position = UDim2.new(0, 0, 1, -25)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "Расшифровка завершена. Код доступен для копирования и сохранения."
+infoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+infoLabel.TextSize = 12
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.Parent = mainFrame
+
+-- Уведомление в консоль
+print("✅ Деобфускатор с GUI запущен. Окно отображается поверх игры.")
+print("📁 Файл будет сохранён в 123/decoded_script.lua при нажатии кнопки.")
+print("📋 Итоговый код также доступен в _G.DECODED_OUTPUT")
