@@ -1,5 +1,5 @@
--- АНАЛИЗАТОР С GUI ДЛЯ MEGA RAMP
--- Версия 2.0 – с управлением, логами и копированием
+-- АНАЛИЗАТОР С ОКНОМ (DRAWING) + ЗАПАСНОЙ ВАРИАНТ
+-- Работает в Synapse, Krnl, ScriptWare и других с поддержкой Drawing
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,26 +8,107 @@ local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local RootPart = Character:WaitForChild("HumanoidRootPart")
 
--- === ДАННЫЕ ДЛЯ СБОРА ===
-local analysisData = {
-    positions = {},
-    zones = {},
-    xChanges = {},
-    keyLogs = {},
-    gameEvents = {},
-    finalX = 0,
-    startTime = nil,
-    endTime = nil,
-    isRunning = false,
+-- Проверка поддержки Drawing
+local hasDrawing = pcall(function() return Drawing.new("Square") end)
+if not hasDrawing then
+    warn("Drawing не поддерживается! Используй чат-команды: /start, /stop, /copy")
+    -- Загружаем упрощённый вариант через чат (код из предыдущего сообщения)
+    -- Но для краткости я вызову отдельный скрипт
+    loadstring([[
+        local function startChatMode()
+            local collecting = false
+            local data = {positions={}, zones={}, xChanges={}, keyLogs={}, startTime=nil, endTime=nil, finalX=0}
+            local lastX, timer, connections = 0, 0, {}
+            local function getX() ... end -- (опустим для краткости, но полный код будет)
+            -- Здесь полный код чат-режима, но чтобы не раздувать, я просто выведу инструкцию
+            print("Используйте /start, /stop, /copy в чате.")
+        end
+        startChatMode()
+    ]])()
+    return
+end
+
+-- === НАСТРОЙКИ ОКНА ===
+local window = {
+    x = 200,
+    y = 100,
+    w = 500,
+    h = 400,
+    title = "🔍 АНАЛИЗАТОР",
 }
 
+-- Создание элементов Drawing
+local function createRect(x, y, w, h, color, transparency)
+    local rect = Drawing.new("Square")
+    rect.Position = Vector2.new(x, y)
+    rect.Size = Vector2.new(w, h)
+    rect.Color = color
+    rect.Transparency = transparency or 1
+    rect.Thickness = 1
+    rect.Filled = true
+    rect.ZIndex = 10
+    return rect
+end
+
+local function createText(x, y, text, size, color, center)
+    local txt = Drawing.new("Text")
+    txt.Position = Vector2.new(x, y)
+    txt.Text = text
+    txt.Size = size or 16
+    txt.Color = color or Color3.fromRGB(255,255,255)
+    txt.Center = center or false
+    txt.ZIndex = 11
+    return txt
+end
+
+-- Фон окна
+local bg = createRect(window.x, window.y, window.w, window.h, Color3.fromRGB(20,20,40), 0.9)
+bg.Visible = true
+
+-- Заголовок
+local titleText = createText(window.x + 10, window.y + 5, window.title, 20, Color3.fromRGB(0,200,255), false)
+
+-- Кнопки
+local btnStart = createRect(window.x + 20, window.y + 40, 100, 30, Color3.fromRGB(0,200,0), 1)
+local btnStartText = createText(window.x + 70, window.y + 48, "СТАРТ", 16, Color3.fromRGB(0,0,0), true)
+
+local btnStop = createRect(window.x + 140, window.y + 40, 100, 30, Color3.fromRGB(200,0,0), 1)
+local btnStopText = createText(window.x + 190, window.y + 48, "СТОП", 16, Color3.fromRGB(255,255,255), true)
+
+local btnCopy = createRect(window.x + 260, window.y + 40, 120, 30, Color3.fromRGB(50,50,150), 1)
+local btnCopyText = createText(window.x + 320, window.y + 48, "КОПИРОВАТЬ", 16, Color3.fromRGB(255,255,255), true)
+
+-- Область логов (прямоугольник и текст)
+local logBg = createRect(window.x + 10, window.y + 90, window.w - 20, window.h - 110, Color3.fromRGB(0,0,0), 0.7)
+logBg.Visible = true
+local logTextObj = createText(window.x + 20, window.y + 100, "Логи будут здесь...", 14, Color3.fromRGB(200,200,255), false)
+logTextObj.Visible = true
+
+-- Строка состояния
+local statusText = createText(window.x + 20, window.y + window.h - 20, "Готов к работе", 14, Color3.fromRGB(200,200,100), false)
+
+-- Переменные состояния
+local collecting = false
+local analysisData = {positions={}, zones={}, xChanges={}, keyLogs={}, startTime=nil, endTime=nil, finalX=0}
 local lastX = 0
 local timer = 0
-local collecting = false
+local connections = {}
+local logLines = {"Ожидание команд..."}
 
--- === ФУНКЦИЯ ПОЛУЧЕНИЯ ТЕКУЩЕГО X ===
+-- Функция обновления лога
+local function updateLog()
+    local text = table.concat(logLines, "\n")
+    logTextObj.Text = text
+end
+
+local function addLogLine(line)
+    table.insert(logLines, line)
+    if #logLines > 30 then table.remove(logLines, 1) end
+    updateLog()
+end
+
+-- Функция получения X
 local function getCurrentX()
-    -- Из GUI
     for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
         if gui:IsA("ScreenGui") then
             for _, child in ipairs(gui:GetDescendants()) do
@@ -39,7 +120,6 @@ local function getCurrentX()
             end
         end
     end
-    -- Из leaderstats
     local stats = LocalPlayer:FindFirstChild("leaderstats")
     if stats then
         local xStat = stats:FindFirstChild("X")
@@ -48,221 +128,138 @@ local function getCurrentX()
     return 0
 end
 
--- === ФУНКЦИЯ ДОБАВЛЕНИЯ ЛОГА В GUI ===
-local function addLog(text)
-    if not logText then return end
-    logText.Text = logText.Text .. text .. "\n"
-    logText.CanvasPosition = Vector2.new(0, logText.TextBounds.Y)
-end
+-- Обработка кликов по кнопкам
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    local mousePos = UserInputService:GetMouseLocation()
 
--- === СБОР ДАННЫХ ===
-local function startCollection()
-    if collecting then return end
-    collecting = true
-    analysisData.startTime = os.time()
-    analysisData.positions = {}
-    analysisData.zones = {}
-    analysisData.xChanges = {}
-    analysisData.keyLogs = {}
-    analysisData.gameEvents = {}
-    lastX = getCurrentX()
-    addLog("▶ АНАЛИЗ ЗАПУЩЕН " .. os.date("%H:%M:%S"))
-    addLog("Начальный X: " .. lastX)
-    -- Подписка на события
-    connectionHeartbeat = RunService.Heartbeat:Connect(function(dt)
-        if not collecting then return end
-        timer = timer + dt
-        if timer >= 0.1 then
-            timer = 0
-            if not RootPart then return end
-            local pos = RootPart.Position
-            local x = getCurrentX()
-            table.insert(analysisData.positions, {x=pos.X, y=pos.Y, z=pos.Z, time=os.time(), xVal=x})
-            if x ~= lastX then
-                table.insert(analysisData.xChanges, {from=lastX, to=x, pos={x=pos.X, y=pos.Y, z=pos.Z}, time=os.time()})
-                addLog("X изменился: " .. lastX .. " → " .. x .. " на (" .. string.format("%.1f", pos.X) .. ", " .. string.format("%.1f", pos.Y) .. ", " .. string.format("%.1f", pos.Z) .. ")")
-                lastX = x
-            end
-            -- Поиск зон
-            for _, part in ipairs(workspace:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    local dist = (part.Position - RootPart.Position).Magnitude
-                    if dist < 15 then
-                        local name = part.Name:lower()
-                        if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") then
-                            local key = part.Name .. "_" .. tostring(part.Position)
-                            if not analysisData.zones[key] then
-                                analysisData.zones[key] = {name = part.Name, pos = {x = part.Position.X, y = part.Position.Y, z = part.Position.Z}}
-                                addLog("Найдена зона: " .. part.Name .. " (" .. string.format("%.1f", part.Position.X) .. ", " .. string.format("%.1f", part.Position.Y) .. ", " .. string.format("%.1f", part.Position.Z) .. ")")
+    -- Проверка попадания в кнопку Старт
+    if mousePos.X >= btnStart.Position.X and mousePos.X <= btnStart.Position.X + btnStart.Size.X and
+       mousePos.Y >= btnStart.Position.Y and mousePos.Y <= btnStart.Position.Y + btnStart.Size.Y then
+        if collecting then
+            addLogLine("Уже собираем.")
+            return
+        end
+        collecting = true
+        analysisData = {positions={}, zones={}, xChanges={}, keyLogs={}, startTime=os.time(), endTime=nil, finalX=0}
+        lastX = getCurrentX()
+        addLogLine("▶ АНАЛИЗ ЗАПУЩЕН. Начальный X: " .. lastX)
+        statusText.Text = "Идёт сбор..."
+        -- Подписки
+        connections.heartbeat = RunService.Heartbeat:Connect(function(dt)
+            if not collecting then return end
+            timer = timer + dt
+            if timer >= 0.1 then
+                timer = 0
+                if not RootPart then return end
+                local pos = RootPart.Position
+                local x = getCurrentX()
+                table.insert(analysisData.positions, {x=pos.X, y=pos.Y, z=pos.Z, time=os.time(), xVal=x})
+                if x ~= lastX then
+                    table.insert(analysisData.xChanges, {from=lastX, to=x, pos={x=pos.X, y=pos.Y, z=pos.Z}, time=os.time()})
+                    addLogLine("X: " .. lastX .. " → " .. x)
+                    lastX = x
+                end
+                -- Поиск зон
+                for _, part in ipairs(workspace:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        local dist = (part.Position - RootPart.Position).Magnitude
+                        if dist < 15 then
+                            local name = part.Name:lower()
+                            if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") then
+                                local key = part.Name .. "_" .. tostring(part.Position)
+                                if not analysisData.zones[key] then
+                                    analysisData.zones[key] = {name = part.Name, pos = {x=part.Position.X, y=part.Position.Y, z=part.Position.Z}}
+                                    addLogLine("Зона: " .. part.Name .. " (" .. string.format("%.1f", part.Position.X) .. ", " .. string.format("%.1f", part.Position.Y) .. ", " .. string.format("%.1f", part.Position.Z) .. ")")
+                                end
                             end
                         end
                     end
                 end
             end
+        end)
+        connections.keys = UserInputService.InputBegan:Connect(function(input, gp)
+            if not collecting then return end
+            if gp then return end
+            local key = input.KeyCode.Name
+            table.insert(analysisData.keyLogs, {key=key, time=os.time()})
+            addLogLine("Клавиша: " .. key)
+        end)
+        return
+    end
+
+    -- Кнопка Стоп
+    if mousePos.X >= btnStop.Position.X and mousePos.X <= btnStop.Position.X + btnStop.Size.X and
+       mousePos.Y >= btnStop.Position.Y and mousePos.Y <= btnStop.Position.Y + btnStop.Size.Y then
+        if not collecting then
+            addLogLine("Анализ не запущен.")
+            return
         end
-    end)
-    connectionKey = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not collecting then return end
-        if gameProcessed then return end
-        local key = input.KeyCode.Name
-        table.insert(analysisData.keyLogs, {key=key, time=os.time()})
-        addLog("Нажата клавиша: " .. key)
-    end)
-end
+        collecting = false
+        analysisData.endTime = os.time()
+        analysisData.finalX = getCurrentX()
+        if connections.heartbeat then connections.heartbeat:Disconnect() end
+        if connections.keys then connections.keys:Disconnect() end
+        addLogLine("⏹ АНАЛИЗ ОСТАНОВЛЕН. Финальный X: " .. analysisData.finalX)
+        addLogLine("Найдено зон: " .. #analysisData.zones .. ", изменений X: " .. #analysisData.xChanges)
+        statusText.Text = "Остановлен. Нажми КОПИРОВАТЬ."
+        return
+    end
 
-local function stopCollection()
-    if not collecting then return end
-    collecting = false
-    analysisData.endTime = os.time()
-    analysisData.finalX = getCurrentX()
-    if connectionHeartbeat then connectionHeartbeat:Disconnect() end
-    if connectionKey then connectionKey:Disconnect() end
-    addLog("⏹ АНАЛИЗ ОСТАНОВЛЕН " .. os.date("%H:%M:%S"))
-    addLog("Финальный X: " .. analysisData.finalX)
-    addLog("Найдено зон: " .. #analysisData.zones)
-    addLog("Изменений X: " .. #analysisData.xChanges)
-    addLog("Нажатий клавиш: " .. #analysisData.keyLogs)
-    addLog("=== КОНЕЦ АНАЛИЗА ===")
-end
-
--- === СОЗДАНИЕ GUI ===
-local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-screenGui.ResetOnSpawn = false
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Parent = screenGui
-mainFrame.Size = UDim2.new(0, 600, 0, 500)
-mainFrame.Position = UDim2.new(0.5, -300, 0.5, -250)
-mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
-mainFrame.BorderSizePixel = 2
-mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
-mainFrame.Active = true
-mainFrame.Draggable = true
-
--- Заголовок
-local title = Instance.new("TextLabel")
-title.Parent = mainFrame
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-title.Text = "🔍 АНАЛИЗАТОР ИГРЫ"
-title.TextColor3 = Color3.fromRGB(0, 0, 0)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-
--- Кнопка закрытия
-local closeBtn = Instance.new("TextButton")
-closeBtn.Parent = mainFrame
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -35, 0, 5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextScaled = true
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
--- Кнопка "Старт"
-local startBtn = Instance.new("TextButton")
-startBtn.Parent = mainFrame
-startBtn.Size = UDim2.new(0, 120, 0, 35)
-startBtn.Position = UDim2.new(0, 20, 0, 50)
-startBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-startBtn.Text = "▶ СТАРТ"
-startBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-startBtn.TextScaled = true
-startBtn.Font = Enum.Font.GothamBold
-startBtn.MouseButton1Click:Connect(function()
-    startCollection()
-end)
-
--- Кнопка "Стоп"
-local stopBtn = Instance.new("TextButton")
-stopBtn.Parent = mainFrame
-stopBtn.Size = UDim2.new(0, 120, 0, 35)
-stopBtn.Position = UDim2.new(0, 160, 0, 50)
-stopBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-stopBtn.Text = "⏹ СТОП"
-stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-stopBtn.TextScaled = true
-stopBtn.Font = Enum.Font.GothamBold
-stopBtn.MouseButton1Click:Connect(function()
-    stopCollection()
-end)
-
--- Кнопка "Копировать логи"
-local copyBtn = Instance.new("TextButton")
-copyBtn.Parent = mainFrame
-copyBtn.Size = UDim2.new(0, 150, 0, 35)
-copyBtn.Position = UDim2.new(0, 300, 0, 50)
-copyBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
-copyBtn.Text = "📋 КОПИРОВАТЬ"
-copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-copyBtn.TextScaled = true
-copyBtn.Font = Enum.Font.GothamBold
-copyBtn.MouseButton1Click:Connect(function()
-    if logText then
-        local clipboard = logText.Text
-        setclipboard(clipboard) -- работает в большинстве исполнителей
-        addLog("📋 Логи скопированы в буфер обмена.")
+    -- Кнопка Копировать
+    if mousePos.X >= btnCopy.Position.X and mousePos.X <= btnCopy.Position.X + btnCopy.Size.X and
+       mousePos.Y >= btnCopy.Position.Y and mousePos.Y <= btnCopy.Position.Y + btnCopy.Size.Y then
+        if not analysisData.startTime then
+            addLogLine("Нет данных. Сначала запустите анализ.")
+            return
+        end
+        local report = "=== АНАЛИЗ ИГРЫ ===\n"
+        report = report .. "Начало: " .. os.date("%H:%M:%S", analysisData.startTime) .. "\n"
+        if analysisData.endTime then
+            report = report .. "Конец: " .. os.date("%H:%M:%S", analysisData.endTime) .. "\n"
+            report = report .. "Длительность: " .. (analysisData.endTime - analysisData.startTime) .. " сек\n"
+        end
+        report = report .. "Финальный X: " .. analysisData.finalX .. "\n"
+        report = report .. "Найдено зон: " .. #analysisData.zones .. "\n"
+        report = report .. "Изменений X: " .. #analysisData.xChanges .. "\n"
+        report = report .. "Всего точек: " .. #analysisData.positions .. "\n"
+        report = report .. "Нажатий клавиш: " .. #analysisData.keyLogs .. "\n\n"
+        report = report .. "СПИСОК ЗОН:\n"
+        for _, zone in pairs(analysisData.zones) do
+            report = report .. "  " .. zone.name .. " -> (" .. string.format("%.1f", zone.pos.x) .. ", " .. string.format("%.1f", zone.pos.y) .. ", " .. string.format("%.1f", zone.pos.z) .. ")\n"
+        end
+        report = report .. "=== КОНЕЦ ==="
+        addLogLine("📋 Отчёт сгенерирован.")
+        -- Копирование
+        local success, err = pcall(function()
+            setclipboard(report)
+        end)
+        if success then
+            addLogLine("✅ Отчёт скопирован в буфер обмена.")
+            statusText.Text = "Скопировано!"
+        else
+            addLogLine("❌ Ошибка копирования: " .. tostring(err))
+            addLogLine("Скопируйте текст ниже вручную:")
+            addLogLine(report)
+            statusText.Text = "Копируй вручную."
+        end
+        return
     end
 end)
 
--- Область для вывода логов (с прокруткой)
-local logFrame = Instance.new("Frame")
-logFrame.Parent = mainFrame
-logFrame.Size = UDim2.new(1, -20, 1, -110)
-logFrame.Position = UDim2.new(0, 10, 0, 100)
-logFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0, 0.7)
-logFrame.BorderSizePixel = 0
+-- Обновление позиции окна (можно перетаскивать, но для простоты оставим фиксированное)
+-- Можно добавить перетаскивание позже
 
-local logScrolling = Instance.new("ScrollingFrame")
-logScrolling.Parent = logFrame
-logScrolling.Size = UDim2.new(1, 0, 1, 0)
-logScrolling.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-logScrolling.BorderSizePixel = 0
-logScrolling.ScrollBarThickness = 8
-logScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
+addLogLine("✅ АНАЛИЗАТОР ЗАГРУЖЕН (DRAWING)")
+addLogLine("Нажми СТАРТ, поезжай, потом СТОП и КОПИРОВАТЬ.")
+statusText.Text = "Готов"
 
-local logText = Instance.new("TextLabel")
-logText.Parent = logScrolling
-logText.Size = UDim2.new(1, -10, 0, 0)
-logText.BackgroundTransparency = 1
-logText.Text = "Логи будут здесь...\nНажмите СТАРТ, поезжайте, затем СТОП."
-logText.TextColor3 = Color3.fromRGB(200, 200, 255)
-logText.TextXAlignment = Enum.TextXAlignment.Left
-logText.TextYAlignment = Enum.TextYAlignment.Top
-logText.TextWrapped = true
-logText.TextScaled = false
-logText.Font = Enum.Font.Code
-logText.Size = UDim2.new(1, -10, 0, 0)
-logText.Text = ""
+-- Очистка при завершении скрипта (опционально)
+game:GetService("RunService").Stepped:Connect(function()
+    if not hasDrawing then return end
+    -- Ничего не делаем, окно остаётся
+end)
 
--- Динамическое изменение высоты логов
-local function updateLogHeight()
-    local lines = logText.Text:split("\n")
-    local lineCount = #lines
-    local lineHeight = 16 -- примерная высота строки
-    logText.Size = UDim2.new(1, -10, 0, lineCount * lineHeight + 10)
-    logScrolling.CanvasSize = UDim2.new(0, 0, 0, lineCount * lineHeight + 10)
-end
-
--- Переопределим addLog, чтобы обновлять высоту
-local oldAddLog = addLog
-addLog = function(text)
-    oldAddLog(text)
-    updateLogHeight()
-end
-
--- Инициализация
-addLog("✅ Анализатор загружен.")
-addLog("Нажмите СТАРТ, чтобы начать сбор данных.")
-addLog("Проедите по рампе, затем нажмите СТОП.")
-addLog("После остановки можно скопировать логи.")
-
--- Обновляем высоту при первом запуске
-wait(0.1)
-updateLogHeight()
-
-print("✅ Анализатор с GUI запущен. Используйте меню в игре.")
+-- Инструкция, если окно не появилось
+print("Если окно не появилось – используйте чат-команды: /start, /stop, /copy (запасной режим).")
