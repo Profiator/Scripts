@@ -1,224 +1,99 @@
--- ============================================================
--- FLY SCRIPT + КООРДИНАТЫ
--- Версия 1.0
--- Включает режим полёта с управлением WASD + Пробел/Shift
--- Показывает текущие координаты с точностью до 2 знаков
--- ============================================================
+-- MEGA RAMP FOR SLIME
+-- Original recovered logic with ONLY the last-zone target changed:
+--   Checkpoint: 68 -> 92
+--   Final CFrame: (-21, 3, 2101) -> (16.58, 4.00, 3304.53)
+-- Everything else is kept in the same simple cycle.
 
-local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local rootPart = character:WaitForChild("HumanoidRootPart")
-local humanoid = character:WaitForChild("Humanoid")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
 
--- Переменные состояния
-local flyEnabled = false
-local flySpeed = 50
-local bodyVelocity = nil
-local bodyGyro = nil
+local LocalPlayer = Players.LocalPlayer
 
--- Создаём GUI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FlyCoordGUI"
-screenGui.Parent = player:WaitForChild("PlayerGui")
-screenGui.ResetOnSpawn = false
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 240, 0, 180)
-mainFrame.Position = UDim2.new(0.5, -120, 0.5, -90)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-mainFrame.BorderSizePixel = 1
-mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Parent = screenGui
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-title.Text = "🛸 FLY + COORD"
-title.TextColor3 = Color3.fromRGB(0, 0, 0)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.Parent = mainFrame
-
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -35, 0, 0)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextScaled = true
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.Parent = mainFrame
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
--- Кнопка включения полёта
-local flyBtn = Instance.new("TextButton")
-flyBtn.Size = UDim2.new(0, 100, 0, 30)
-flyBtn.Position = UDim2.new(0, 10, 0, 40)
-flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-flyBtn.Text = "ВКЛ"
-flyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-flyBtn.TextScaled = true
-flyBtn.Font = Enum.Font.GothamBold
-flyBtn.Parent = mainFrame
-
--- Текст координат
-local coordLabel = Instance.new("TextLabel")
-coordLabel.Size = UDim2.new(1, -20, 0, 30)
-coordLabel.Position = UDim2.new(0, 10, 0, 85)
-coordLabel.BackgroundTransparency = 1
-coordLabel.Text = "X: 0.00  Y: 0.00  Z: 0.00"
-coordLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
-coordLabel.TextSize = 16
-coordLabel.Font = Enum.Font.Code
-coordLabel.Parent = mainFrame
-
-local speedSlider = Instance.new("TextBox")
-speedSlider.Size = UDim2.new(0, 80, 0, 25)
-speedSlider.Position = UDim2.new(0, 120, 0, 40)
-speedSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-speedSlider.Text = tostring(flySpeed)
-speedSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
-speedSlider.TextSize = 14
-speedSlider.Font = Enum.Font.Gotham
-speedSlider.Parent = mainFrame
-speedSlider.FocusLost:Connect(function()
-    local val = tonumber(speedSlider.Text)
-    if val and val > 0 then
-        flySpeed = val
-    else
-        speedSlider.Text = tostring(flySpeed)
-    end
-end)
-
--- Функция обновления координат
-local function updateCoordDisplay()
-    if not rootPart then return end
-    local pos = rootPart.Position
-    coordLabel.Text = string.format("X: %.2f  Y: %.2f  Z: %.2f", pos.X, pos.Y, pos.Z)
+local oldGui = CoreGui:FindFirstChild("ToraScript")
+if oldGui then
+    oldGui:Destroy()
 end
 
--- Функция включения полёта
-local function enableFly()
-    if not character or not rootPart then return end
-    humanoid.PlatformStand = true
-    humanoid.AutoRotate = false
+local Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/liebertsx/Tora-Library/main/src/librarynew",
+    true
+))()
 
-    -- BodyVelocity для движения
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    bodyVelocity.P = 1e5
-    bodyVelocity.Parent = rootPart
+local Window = Library:CreateWindow("MEGA RAMP FOR SLIME")
 
-    -- BodyGyro для контроля ориентации
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    bodyGyro.P = 1e5
-    bodyGyro.CFrame = rootPart.CFrame
-    bodyGyro.Parent = rootPart
-end
+local function LastZone()
+    while _G.LastZone do
+        wait()
 
--- Функция отключения полёта
-local function disableFly()
-    if bodyVelocity then bodyVelocity:Destroy() end
-    if bodyGyro then bodyGyro:Destroy() end
-    bodyVelocity = nil
-    bodyGyro = nil
-    humanoid.PlatformStand = false
-    humanoid.AutoRotate = true
-end
+        -- ORIGINAL: move the player to the car spawn.
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame =
+            workspace.Progetto.CarSpawn.CFrame
 
--- Обработчик клика по кнопке
-flyBtn.MouseButton1Click:Connect(function()
-    flyEnabled = not flyEnabled
-    flyBtn.Text = flyEnabled and "ВЫКЛ" or "ВКЛ"
-    flyBtn.BackgroundColor3 = flyEnabled and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(60, 60, 80)
+        wait(1)
 
-    if flyEnabled then
-        enableFly()
-    else
-        disableFly()
-    end
-end)
+        -- ORIGINAL: scan workspace and use the object whose Name equals player Name.
+        for _, car in pairs(workspace:GetChildren()) do
+            if car.Name == game.Players.LocalPlayer.Name then
+                -- ORIGINAL first position.
+                car:SetPrimaryPartCFrame(workspace.Progetto.JumpCar.CFrame)
+                wait(0.2)
 
--- Обновление движения в каждом кадре
-local function updateFly()
-    if not flyEnabled then return end
-    if not character or not rootPart then return end
+                -- ONLY CHANGE #1: old script used Checkpoints["68"].
+                -- x1,000,000 is Checkpoint 92.
+                car:SetPrimaryPartCFrame(workspace.Progetto.Checkpoints["92"].CFrame)
+                wait(0.2)
 
-    local moveDirection = Vector3.new(0, 0, 0)
-    local camera = workspace.CurrentCamera
-    local forward = camera.CFrame.LookVector
-    local right = camera.CFrame.RightVector
-    local up = camera.CFrame.UpVector
+                -- ONLY CHANGE #2: final x1,000,000 coordinates supplied by user.
+                car:SetPrimaryPartCFrame(CFrame.new(16.58, 4.00, 3304.53))
+                wait(1)
 
-    -- WASD
-    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then
-        moveDirection = moveDirection + forward
-    end
-    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then
-        moveDirection = moveDirection - forward
-    end
-    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then
-        moveDirection = moveDirection - right
-    end
-    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then
-        moveDirection = moveDirection + right
-    end
-    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then
-        moveDirection = moveDirection + up
-    end
-    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftShift) then
-        moveDirection = moveDirection - up
-    end
-
-    if moveDirection.Magnitude > 0 then
-        moveDirection = moveDirection.Unit * flySpeed
-    else
-        moveDirection = Vector3.new(0, 0, 0)
-    end
-
-    bodyVelocity.Velocity = moveDirection
-
-    -- Обновляем ориентацию (смотрим в направлении движения)
-    if moveDirection.Magnitude > 0.1 then
-        local lookCFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + moveDirection)
-        bodyGyro.CFrame = lookCFrame
-    end
-end
-
--- Главный цикл (сборка)
-local connection = game:GetService("RunService").Heartbeat:Connect(function()
-    updateCoordDisplay()
-    updateFly()
-end)
-
--- Обработка смены персонажа (респавн)
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-    rootPart = character:WaitForChild("HumanoidRootPart")
-    humanoid = character:WaitForChild("Humanoid")
-    if flyEnabled then
-        disableFly()
-        flyEnabled = false
-        flyBtn.Text = "ВКЛ"
-        flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-    end
-end)
-
--- Отключаем при остановке скрипта
-pcall(function()
-    screenGui.AncestryChanged:Connect(function()
-        if not screenGui.Parent then
-            if flyEnabled then disableFly() end
-            connection:Disconnect()
+                -- ORIGINAL reward clicks.
+                for _ = 1, 10 do
+                    game:GetService("ReplicatedStorage").Remotes.OpenBoxClick:FireServer()
+                end
+            end
         end
-    end)
-end)
+    end
+end
 
-print("✅ Fly + Coord скрипт загружен!")
-print("Используйте WASD + Пробел/Shift для управления.")
-print("Координаты обновляются в меню.")
+local function Equip()
+    while _G.Equip do
+        game:GetService("ReplicatedStorage").Remotes.EquipBestInventory:FireServer()
+        wait(2)
+    end
+end
+
+Window:AddToggle({
+    text = "Instant LastZone",
+    flag = "toggle",
+    state = false,
+    callback = function(value)
+        _G.LastZone = value
+        print("LastZone: ", value)
+
+        if value then
+            spawn(LastZone)
+        end
+    end,
+})
+
+Window:AddToggle({
+    text = "Equip Best",
+    flag = "toggle",
+    state = false,
+    callback = function(value)
+        _G.Equip = value
+        print("Equip: ", value)
+
+        if value then
+            spawn(Equip)
+        end
+    end,
+})
+
+Window:AddLabel({
+    text = "YouTube: Tora IsMe",
+})
+
+Library:Init()
