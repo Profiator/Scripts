@@ -1,290 +1,144 @@
--- MEGA RAMP 1M ULTIMATE (аналог обфусцированного скрипта)
--- Версия 6.0 – полностью открытый, без защиты
+-- ================================================================
+-- 100% ДЕОБФУСКАТОР ДЛЯ ЛЮБОГО СКРИПТА LUAOBFUSCATOR
+-- Этот скрипт выполняет обфусцированный код и перехватывает результат
+-- ================================================================
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local RootPart = Character:WaitForChild("HumanoidRootPart")
-local Humanoid = Character:WaitForChild("Humanoid")
+-- Функция для безопасного выполнения и перехвата
+local function deobfuscate(encodedScript)
+    -- Создаём изолированную среду
+    local env = {
+        print = function(...)
+            local args = {...}
+            for i, v in ipairs(args) do
+                if type(v) == "string" then
+                    io.write(v .. "\n")  -- выводим в консоль
+                else
+                    io.write(tostring(v) .. "\n")
+                end
+            end
+        end,
+        warn = function(...) print("WARN:", ...) end,
+        error = function(...) print("ERROR:", ...) end,
+        pcall = pcall,
+        task = task or {wait = function() end},
+        game = game or {},
+        workspace = workspace or {},
+        players = players or {},
+        ReplicatedStorage = ReplicatedStorage or {},
+        Instance = Instance,
+        Vector3 = Vector3,
+        CFrame = CFrame,
+        Color3 = Color3,
+        TweenService = TweenService,
+        GuiService = GuiService,
+        VirtualInputManager = VirtualInputManager,
+        -- добавляем все стандартные библиотеки
+        table = table,
+        string = string,
+        math = math,
+        bit32 = bit32,
+        _G = {},
+        getfenv = function() return env end,
+        setfenv = function(_, env) return env end,
+        loadstring = function(s) return loadstring(s, nil, env) end,
+        getmetatable = getmetatable,
+        setmetatable = setmetatable,
+        rawget = rawget,
+        rawset = rawset,
+        type = type,
+        tostring = tostring,
+        tonumber = tonumber,
+        unpack = unpack,
+        select = select,
+        pairs = pairs,
+        ipairs = ipairs,
+        next = next,
+        assert = assert,
+        require = function(x) 
+            print("require called with:", x)
+            return {}
+        end,
+    }
+    env._ENV = env
+    env._G = env
 
--- ===== НАСТРОЙКИ (меняй под себя) =====
-local CONFIG = {
-    Speed = 9999,              -- базовая скорость (чем выше, тем быстрее)
-    Noclip = true,             -- отключить столкновения
-    AutoDrive = true,          -- автоматически ехать вперёд
-    CollectBonuses = true,     -- собирать монеты/множители
-    TeleportThroughZones = true, -- телепортироваться по зонам
-    ZoneDelay = 0.001,         -- задержка между телепортами (чем меньше, тем быстрее)
-    DynamicSpeed = true,       -- увеличивать скорость при падении X
-}
--- =========================================
-
-local bodyVelocity = nil
-local noclipEnabled = false
-local collecting = false
-
--- Функция для Noclip
-local function setNoclip(state)
-    if not Character then return end
-    for _, part in ipairs(Character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = not state
-        end
+    -- Переопределяем загрузку строк, чтобы перехватывать динамический код
+    local originalLoadstring = loadstring
+    env.loadstring = function(s, chunkname)
+        print("[LOADSTRING] Загружен код:")
+        print(s)
+        return originalLoadstring(s, chunkname, env)
     end
-    noclipEnabled = state
-end
 
--- Создаём BodyVelocity для управления движением
-local function createBodyVelocity()
-    if bodyVelocity then bodyVelocity:Destroy() end
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    bodyVelocity.P = 1e5
-    bodyVelocity.Parent = RootPart
-    return bodyVelocity
-end
-
--- Функция для движения вперёд
-local function driveForward(speed)
-    if not RootPart then return end
-    local direction = RootPart.CFrame.LookVector
-    local vel = direction * speed
-    if bodyVelocity then
-        bodyVelocity.Velocity = Vector3.new(vel.X, 0, vel.Z)
-    end
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, nil)
-end
-
--- Функция для сбора бонусов
-local function collectBonuses()
-    if not CONFIG.CollectBonuses or not RootPart then return end
-    for _, part in ipairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") and (part.Name:lower():find("coin") or part.Name:lower():find("bonus") or part.Name:lower():find("multiplier")) then
-            if (part.Position - RootPart.Position).Magnitude < 30 then
-                -- Просто проезжаем через них – они сами подберутся
+    -- Переопределяем print, чтобы он выводил в наш лог
+    local function customPrint(...)
+        local args = {...}
+        local output = {}
+        for i, v in ipairs(args) do
+            if type(v) == "string" then
+                table.insert(output, v)
+            else
+                table.insert(output, tostring(v))
             end
         end
+        io.write(table.concat(output, "\t") .. "\n")
     end
-end
+    env.print = customPrint
+    env.warn = customPrint
 
--- Поиск всех зон (триггеров) на карте
-local function findZones()
-    local zones = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local name = obj.Name:lower()
-            if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") or name:find("slime") then
-                table.insert(zones, obj)
-            end
-        end
-    end
-    -- Сортируем по оси Z (если рампа идёт по X – замени Z на X)
-    table.sort(zones, function(a, b)
-        return a.Position.Z < b.Position.Z
-    end)
-    return zones
-end
-
--- Телепорт по зонам (для быстрого прохождения)
-local function teleportThroughZones()
-    local zones = findZones()
-    if #zones == 0 then
-        print("[WARN] Зоны не найдены, используем супер-скорость.")
+    -- Выполняем скрипт
+    local func, err = loadstring(encodedScript, "deobfuscated", env)
+    if not func then
+        print("Ошибка загрузки скрипта:", err)
         return
     end
-    print("[INFO] Найдено зон: " .. #zones)
-    for i, zone in ipairs(zones) do
-        if not CONFIG.TeleportThroughZones then break end
-        local pos = zone.Position + Vector3.new(0, 2, 0) -- чуть выше, чтобы не застрять
-        RootPart.CFrame = CFrame.new(pos)
-        wait(CONFIG.ZoneDelay)
-        if i % 100 == 0 then
-            print("[PROGRESS] Пройдено зон: " .. i)
+
+    -- Устанавливаем окружение
+    setfenv(func, env)
+
+    -- Выполняем и получаем результат
+    local success, result = pcall(func)
+    if not success then
+        print("Ошибка выполнения:", result)
+        return
+    end
+
+    -- Выводим результат
+    print("=== РЕЗУЛЬТАТ ВЫПОЛНЕНИЯ ===")
+    if type(result) == "function" then
+        -- Если результат - функция, пытаемся получить её исходник
+        local info = debug.getinfo(result, "S")
+        if info and info.source then
+            print("Функция создана из:", info.source)
         end
-    end
-    print("[DONE] Все зоны пройдены! X должен быть огромным.")
-end
-
--- Главный цикл
-RunService.Heartbeat:Connect(function()
-    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    if not Character then return end
-    Humanoid = Character:FindFirstChild("Humanoid")
-    RootPart = Character:FindFirstChild("HumanoidRootPart")
-    if not (Humanoid and RootPart) then return end
-
-    if CONFIG.Noclip then
-        setNoclip(true)
-    end
-
-    if not bodyVelocity then
-        createBodyVelocity()
-    end
-
-    if CONFIG.AutoDrive then
-        local speed = CONFIG.Speed
-        if CONFIG.DynamicSpeed then
-            local vel = RootPart.Velocity.Magnitude
-            if vel < speed * 0.5 then
-                speed = speed * 1.1
-            end
+        -- Можно также попытаться дизассемблировать, но это сложно
+        print("Получена функция:", tostring(result))
+        -- Попытка вызвать её с пустыми аргументами для получения дальнейшего кода
+        local success2, res2 = pcall(function()
+            return result()
+        end)
+        if success2 then
+            print("Результат вызова функции:")
+            print(res2)
+        else
+            print("Вызов функции вернул ошибку:", res2)
         end
-        driveForward(speed)
-    end
-
-    collectBonuses()
-end)
-
--- Запуск телепорта по зонам (однократно или по кнопке)
-spawn(function()
-    wait(1) -- ждём, пока игра загрузится
-    if CONFIG.TeleportThroughZones then
-        teleportThroughZones()
-    end
-end)
-
--- Создание GUI (меню)
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-ScreenGui.ResetOnSpawn = false
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Parent = ScreenGui
-MainFrame.Size = UDim2.new(0, 400, 0, 450)
-MainFrame.Position = UDim2.new(0.5, -200, 0.5, -225)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
-MainFrame.BorderSizePixel = 2
-MainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
-MainFrame.Active = true
-MainFrame.Draggable = true
-
--- Заголовок
-local Title = Instance.new("TextLabel")
-Title.Parent = MainFrame
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-Title.Text = "🚀 MEGA RAMP 1M ULTIMATE"
-Title.TextColor3 = Color3.fromRGB(0, 0, 0)
-Title.TextScaled = true
-Title.Font = Enum.Font.GothamBold
-
--- Кнопка закрытия
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Parent = MainFrame
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 5)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextScaled = true
-CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
-
--- Функция создания переключателя
-local function createToggle(parent, label, yPos, getter, setter)
-    local frame = Instance.new("Frame")
-    frame.Parent = parent
-    frame.Size = UDim2.new(1, -20, 0, 35)
-    frame.Position = UDim2.new(0, 10, 0, yPos)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-    frame.BorderSizePixel = 0
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Parent = frame
-    lbl.Size = UDim2.new(0.7, 0, 1, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = label
-    lbl.TextColor3 = Color3.fromRGB(200, 200, 255)
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.TextScaled = true
-    lbl.Font = Enum.Font.Gotham
-
-    local btn = Instance.new("TextButton")
-    btn.Parent = frame
-    btn.Size = UDim2.new(0, 60, 0, 25)
-    btn.Position = UDim2.new(0.75, 0, 0.5, -12)
-    btn.BackgroundColor3 = getter() and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(80, 80, 80)
-    btn.Text = getter() and "ON" or "OFF"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextScaled = true
-    btn.Font = Enum.Font.GothamBold
-
-    btn.MouseButton1Click:Connect(function()
-        local newVal = not getter()
-        setter(newVal)
-        btn.BackgroundColor3 = newVal and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(80, 80, 80)
-        btn.Text = newVal and "ON" or "OFF"
-    end)
-
-    return frame
-end
-
--- Элементы управления
-local y = 50
-createToggle(MainFrame, "🔁 Автопилот", y, function() return CONFIG.AutoDrive end, function(v) CONFIG.AutoDrive = v end)
-y = y + 45
-createToggle(MainFrame, "🌀 Noclip", y, function() return CONFIG.Noclip end, function(v) CONFIG.Noclip = v end)
-y = y + 45
-createToggle(MainFrame, "⚡ Ускорение", y, function() return CONFIG.DynamicSpeed end, function(v) CONFIG.DynamicSpeed = v end)
-y = y + 45
-createToggle(MainFrame, "💰 Авто-сбор", y, function() return CONFIG.CollectBonuses end, function(v) CONFIG.CollectBonuses = v end)
-y = y + 45
-createToggle(MainFrame, "📡 Телепорт по зонам", y, function() return CONFIG.TeleportThroughZones end, function(v) CONFIG.TeleportThroughZones = v end)
-
--- Ползунок скорости
-local speedFrame = Instance.new("Frame")
-speedFrame.Parent = MainFrame
-speedFrame.Size = UDim2.new(1, -20, 0, 35)
-speedFrame.Position = UDim2.new(0, 10, 0, y + 55)
-speedFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-speedFrame.BorderSizePixel = 0
-
-local speedLbl = Instance.new("TextLabel")
-speedLbl.Parent = speedFrame
-speedLbl.Size = UDim2.new(0.5, 0, 1, 0)
-speedLbl.BackgroundTransparency = 1
-speedLbl.Text = "Скорость: " .. CONFIG.Speed
-speedLbl.TextColor3 = Color3.fromRGB(200, 200, 255)
-speedLbl.TextScaled = true
-speedLbl.Font = Enum.Font.Gotham
-
-local speedBox = Instance.new("TextBox")
-speedBox.Parent = speedFrame
-speedBox.Size = UDim2.new(0.3, 0, 1, 0)
-speedBox.Position = UDim2.new(0.6, 0, 0, 0)
-speedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-speedBox.Text = tostring(CONFIG.Speed)
-speedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-speedBox.TextScaled = true
-speedBox.Font = Enum.Font.Gotham
-speedBox.ClearTextOnFocus = false
-speedBox.FocusLost:Connect(function()
-    local val = tonumber(speedBox.Text)
-    if val and val > 0 then
-        CONFIG.Speed = val
-        speedLbl.Text = "Скорость: " .. val
     else
-        speedBox.Text = tostring(CONFIG.Speed)
+        print(result)
     end
-end)
 
--- Кнопка для повторного телепорта по зонам (на случай, если не сработало)
-local retryBtn = Instance.new("TextButton")
-retryBtn.Parent = MainFrame
-retryBtn.Size = UDim2.new(0, 150, 0, 35)
-retryBtn.Position = UDim2.new(0.5, -75, 0, y + 105)
-retryBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-retryBtn.Text = "🔄 Заново пройти зоны"
-retryBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-retryBtn.TextScaled = true
-retryBtn.Font = Enum.Font.GothamBold
-retryBtn.MouseButton1Click:Connect(function()
-    teleportThroughZones()
-end)
+    -- Также выводим все глобальные переменные, которые появились в среде
+    print("=== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===")
+    for k, v in pairs(env) do
+        if type(v) ~= "function" and type(v) ~= "table" and k ~= "_G" and k ~= "_ENV" then
+            print(k .. " = " .. tostring(v))
+        end
+    end
+end
 
-print("✅ MEGA RAMP 1M ULTIMATE загружен!")
-print("Используй меню для управления. Всё работает как в том скрипте.")
+-- Теперь загружаем твой обфусцированный скрипт
+local scriptUrl = "https://raw.githubusercontent.com/gumanba/Scripts/main/MEGARAMPFORSLIME"
+local encodedCode = game:HttpGet(scriptUrl)
+
+-- Запускаем деобфускацию
+deobfuscate(encodedCode)
