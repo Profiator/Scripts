@@ -1,305 +1,430 @@
--- ================================================================
--- УЛЬТИМАТИВНЫЙ ДЕОБФУСКАТОР С ГАРАНТИРОВАННЫМ ОКНОМ
--- Версия 2.0 (для XENO и других инжекторов)
--- ================================================================
+-- ============================================================
+-- MEGA RAMP FOR SLIME — РАБОЧАЯ ВЕРСИЯ
+-- Полностью расшифрованный скрипт для фарма
+-- ============================================================
 
--- 1. Перехватываем стандартные функции
-local oldPrint = print
-local oldWarn = warn
-local oldLoadstring = loadstring
-local oldHttpGet = game.HttpGet
+task.wait(2)
 
--- Буфер для сбора всего вывода
-local outputBuffer = {}
-local function addToBuffer(str)
-    table.insert(outputBuffer, str)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local EndBoxReveal = Remotes:WaitForChild("EndBoxReveal")
+local InventoryUpdate = Remotes:WaitForChild("InventoryUpdate")
+local SellSlimeAction = Remotes:WaitForChild("SellSlimeAction")
+local JumpLuckStart = Remotes:WaitForChild("JumpLuckStart")
+
+local TARGET_CFRAME = CFrame.new(0, 135, -1534)
+local TARGET_POSITION = Vector3.new(-3, 4, 2806)
+local MOVE_SPEED = 367
+local JUMP_HEIGHT = 120
+
+local RARITY_FILTERS = {
+    DIVINO = false,
+    SECRET = true,
+    LEGGENDARIO = true,
+    EPICO = true,
+    RARO = true,
+    MITICO = true,
+    ["NON COMUNE"] = true,
+    COMUNE = true
+}
+
+local oldGui = PlayerGui:FindFirstChild("HackerToolsUI")
+if oldGui then oldGui:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "HackerToolsUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 170, 0, 140)
+MainFrame.Position = UDim2.new(0.05, 0, 0.35, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner", MainFrame)
+Corner.CornerRadius = UDim.new(0, 6)
+
+local Stroke = Instance.new("UIStroke", MainFrame)
+Stroke.Color = Color3.fromRGB(255, 50, 80)
+Stroke.Thickness = 1.5
+Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 24)
+Title.Position = UDim2.new(0, 0, 0, 4)
+Title.BackgroundTransparency = 1
+Title.Text = "[ SYSTEM_HUB ]"
+Title.TextColor3 = Color3.fromRGB(255, 50, 80)
+Title.TextSize = 12
+Title.Font = Enum.Font.Code
+
+local Subtitle = Instance.new("TextLabel", MainFrame)
+Subtitle.Size = UDim2.new(1, 0, 0, 16)
+Subtitle.Position = UDim2.new(0, 0, 0, 20)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Text = "> Sub to AmnS <"
+Subtitle.TextColor3 = Color3.fromRGB(0, 150, 255)
+Subtitle.TextSize = 11
+Subtitle.Font = Enum.Font.Code
+
+local ButtonContainer = Instance.new("Frame", MainFrame)
+ButtonContainer.Size = UDim2.new(1, 0, 0, 100)
+ButtonContainer.Position = UDim2.new(0, 0, 0, 38)
+ButtonContainer.BackgroundTransparency = 1
+
+local ButtonLayout = Instance.new("UIListLayout", ButtonContainer)
+ButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+ButtonLayout.Padding = UDim.new(0, 6)
+
+local RarityFrame = Instance.new("Frame", MainFrame)
+RarityFrame.Size = UDim2.new(0, 160, 0, 330)
+RarityFrame.Position = UDim2.new(0, 10, 0, 60)
+RarityFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 16)
+RarityFrame.BorderSizePixel = 0
+RarityFrame.Visible = false
+
+local RarityCorner = Instance.new("UICorner", RarityFrame)
+RarityCorner.CornerRadius = UDim.new(0, 6)
+
+local RarityStroke = Instance.new("UIStroke", RarityFrame)
+RarityStroke.Color = Color3.fromRGB(0, 150, 255)
+RarityStroke.Thickness = 1.5
+RarityStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local RarityTitle = Instance.new("TextLabel", RarityFrame)
+RarityTitle.Size = UDim2.new(1, 0, 0, 22)
+RarityTitle.BackgroundTransparency = 1
+RarityTitle.Text = "// RARITY_FILTERS"
+RarityTitle.TextColor3 = Color3.fromRGB(0, 150, 255)
+RarityTitle.TextSize = 11
+RarityTitle.Font = Enum.Font.Code
+
+local RarityLayout = Instance.new("UIListLayout", RarityFrame)
+RarityLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+RarityLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+RarityLayout.Padding = UDim.new(0, 4)
+
+local function CreateButton(parent, text, bgColor, strokeColor, size)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = size or UDim2.new(1, 0, 0, 32)
+    btn.BackgroundColor3 = bgColor
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(240, 244, 248)
+    btn.TextSize = 10
+    btn.Font = Enum.Font.Code
+    btn.BorderSizePixel = 0
+
+    local corner = Instance.new("UICorner", btn)
+    corner.CornerRadius = UDim.new(0, 4)
+
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Color = strokeColor or Color3.fromRGB(0, 150, 255)
+    stroke.Thickness = 1
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+    return btn, stroke
 end
 
--- Переопределяем print
-print = function(...)
-    local args = {...}
-    for _, v in ipairs(args) do
-        local str = tostring(v)
-        addToBuffer("[PRINT] " .. str)
-        oldPrint("[DECODED] " .. str)
+local FarmButton, FarmStroke = CreateButton(
+    ButtonContainer,
+    "[ FARM: OFF ]",
+    Color3.fromRGB(18, 15, 22),
+    Color3.fromRGB(255, 50, 80)
+)
+
+local RarityToggle, _ = CreateButton(
+    ButtonContainer,
+    "[ RARITIES >> ]",
+    Color3.fromRGB(15, 18, 25),
+    Color3.fromRGB(0, 150, 255)
+)
+
+local CloseRarity, _ = CreateButton(
+    RarityFrame,
+    "[ CLOSE_MENU X ]",
+    Color3.fromRGB(30, 15, 20),
+    Color3.fromRGB(255, 50, 80),
+    UDim2.new(0, 145, 0, 26)
+)
+
+local RarityNames = {"DIVINO", "SECRET", "LEGGENDARIO", "EPICO", "RARO", "MITICO", "NON COMUNE", "COMUNE"}
+
+local RarityButtons = {}
+
+for _, name in ipairs(RarityNames) do
+    local isSell = RARITY_FILTERS[name]
+    local text = name .. " : " .. (isSell and "SELL" or "KEEP")
+    local bgColor = isSell and Color3.fromRGB(255, 50, 80) or Color3.fromRGB(0, 150, 255)
+    local btn, stroke = CreateButton(
+        RarityFrame,
+        text,
+        Color3.fromRGB(14, 15, 22),
+        bgColor,
+        UDim2.new(0, 145, 0, 26)
+    )
+    RarityButtons[name] = {btn = btn, stroke = stroke}
+
+    btn.MouseButton1Click:Connect(function()
+        RARITY_FILTERS[name] = not RARITY_FILTERS[name]
+        local newState = RARITY_FILTERS[name]
+        btn.Text = name .. " : " .. (newState and "SELL" or "KEEP")
+        stroke.Color = newState and Color3.fromRGB(255, 50, 80) or Color3.fromRGB(0, 150, 255)
+    end)
+end
+
+local function ToggleRarityMenu(show)
+    RarityFrame.Visible = show
+    RarityToggle.Text = show and "[ RARITIES << ]" or "[ RARITIES >> ]"
+end
+
+RarityToggle.MouseButton1Click:Connect(function()
+    ToggleRarityMenu(not RarityFrame.Visible)
+end)
+
+CloseRarity.MouseButton1Click:Connect(function()
+    ToggleRarityMenu(false)
+end)
+
+local isFarming = false
+local isJumping = false
+local currentInventory = nil
+
+local function TeleportToStart()
+    local character = LocalPlayer.Character
+    if not character then return end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(TARGET_CFRAME)
     end
 end
 
--- Переопределяем warn
-warn = function(...)
-    local args = {...}
-    for _, v in ipairs(args) do
-        local str = tostring(v)
-        addToBuffer("[WARN] " .. str)
-        oldWarn("[DECODED WARN] " .. str)
+local function GetRootPart()
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.SeatPart then
+        local seat = humanoid.SeatPart
+        local model = seat:FindFirstAncestorOfClass("Model") or seat.Parent
+        return model.PrimaryPart or seat
     end
+    return character:FindFirstChild("HumanoidRootPart")
 end
 
--- Перехватываем loadstring
-loadstring = function(s, chunkname)
-    addToBuffer("[LOADSTRING] Блок кода:\n" .. s)
-    oldPrint("[LOADSTRING] Блок кода:\n" .. s)
-    return oldLoadstring(s, chunkname)
+local function GetClickPosition(button)
+    local pos = button.AbsolutePosition
+    local size = button.AbsoluteSize
+    local inset = GuiService:GetGuiInset()
+    return pos.X + size.X / 2, pos.Y + size.Y / 2 + inset.Y
 end
 
--- Перехватываем game:HttpGet
-game.HttpGet = function(self, url, ...)
-    addToBuffer("[HTTPGET] Запрос: " .. url)
-    oldPrint("[HTTPGET] Запрос: " .. url)
-    local content = oldHttpGet(self, url, ...)
-    addToBuffer("[HTTPGET] Получено байт: " .. #content)
-    oldPrint("[HTTPGET] Получено байт: " .. #content)
-    return content
-end
+local function MoveToPosition(targetPos)
+    local root = GetRootPart()
+    if not root then return end
+    local startPos = root.Position
+    local distance = (startPos - targetPos).Magnitude
+    if distance < 1 then return end
+    local duration = distance / MOVE_SPEED
+    if duration < 0.1 then duration = 0.1 end
 
--- 2. Загружаем целевой скрипт
-local targetUrl = "https://raw.githubusercontent.com/gumanba/Scripts/main/MEGARAMPFORSLIME"
-local scriptCode = game:HttpGet(targetUrl)
-
-addToBuffer("=== ОРИГИНАЛЬНЫЙ КОД (сырой) ===")
-addToBuffer(scriptCode)
-oldPrint("=== ОРИГИНАЛЬНЫЙ КОД (сырой) ===")
-oldPrint(scriptCode)
-
--- 3. Выполняем скрипт с перехватом
-addToBuffer("=== ЗАПУСК СКРИПТА ===")
-oldPrint("=== ЗАПУСК СКРИПТА ===")
-
-local func, err = loadstring(scriptCode)
-if func then
-    local success, result = pcall(func)
-    if success then
-        addToBuffer("=== ВЫПОЛНЕНИЕ УСПЕШНО ===")
-        oldPrint("=== ВЫПОЛНЕНИЕ УСПЕШНО ===")
-        if type(result) == "function" then
-            addToBuffer("Получена функция: " .. tostring(result))
-            oldPrint("Получена функция: " .. tostring(result))
-            local success2, res2 = pcall(result)
-            if success2 then
-                addToBuffer("Результат вызова функции: " .. tostring(res2))
-                oldPrint("Результат вызова функции: " .. tostring(res2))
-            else
-                addToBuffer("Ошибка вызова функции: " .. tostring(res2))
-                oldPrint("Ошибка вызова функции: " .. tostring(res2))
-            end
-        else
-            addToBuffer("Результат: " .. tostring(result))
-            oldPrint("Результат: " .. tostring(result))
-        end
+    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+    local model = root:FindFirstAncestorOfClass("Model")
+    if model and model.PrimaryPart == root then
+        local startCF = model:GetPivot()
+        local endCF = CFrame.new(targetPos) * (startCF - startCF.Position)
+        local cframeValue = Instance.new("CFrameValue")
+        cframeValue.Value = startCF
+        local connection = cframeValue.Changed:Connect(function(v)
+            model:PivotTo(v)
+        end)
+        local tween = TweenService:Create(cframeValue, tweenInfo, {Value = endCF})
+        tween:Play()
+        tween.Completed:Wait()
+        connection:Disconnect()
+        cframeValue:Destroy()
     else
-        addToBuffer("Ошибка выполнения: " .. tostring(result))
-        oldPrint("Ошибка выполнения: " .. tostring(result))
+        local tween = TweenService:Create(root, tweenInfo, {CFrame = CFrame.new(targetPos)})
+        tween:Play()
+        tween.Completed:Wait()
     end
-else
-    addToBuffer("Ошибка загрузки: " .. tostring(err))
-    oldPrint("Ошибка загрузки: " .. tostring(err))
 end
 
-addToBuffer("=== ВЫПОЛНЕНИЕ ЗАВЕРШЕНО ===")
-oldPrint("=== ВЫПОЛНЕНИЕ ЗАВЕРШЕНО ===")
+local function ClickCloseButton()
+    local mainUI = PlayerGui:FindFirstChild("MainGameUI")
+    if not mainUI then return end
+    local sellFrame = mainUI:FindFirstChild("SellSlimeFrame")
+    if not sellFrame or not sellFrame.Visible then return end
 
--- 4. Собираем итоговый текст
-local fullOutput = table.concat(outputBuffer, "\n")
-_G.DECODED_OUTPUT = fullOutput
-
--- 5. ГАРАНТИРОВАННОЕ СОЗДАНИЕ GUI
-oldPrint("=== СОЗДАНИЕ GUI ===")
-local function createGUI()
-    -- Ждём, пока игрок появится
-    local player = game:GetService("Players").LocalPlayer
-    if not player then
-        oldPrint("❌ LocalPlayer не найден, ждём...")
-        task.wait(1)
-        return false
-    end
-
-    -- Ждём PlayerGui
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if not playerGui then
-        oldPrint("❌ PlayerGui не найден, ждём...")
-        task.wait(1)
-        return false
-    end
-
-    -- Создаём ScreenGui
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "DeobfuscatorGUI"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = playerGui
-
-    -- Проверяем, создалось ли
-    if not screenGui.Parent then
-        oldPrint("❌ Не удалось прикрепить ScreenGui к PlayerGui")
-        return false
-    end
-
-    oldPrint("✅ ScreenGui создан и прикреплён")
-
-    -- Основное окно
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 800, 0, 600)
-    mainFrame.Position = UDim2.new(0.5, -400, 0.5, -300)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    mainFrame.BorderSizePixel = 2
-    mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
-    mainFrame.Parent = screenGui
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-
-    -- Заголовок
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-    title.Text = "🔓 РАСШИФРОВАННЫЙ КОД"
-    title.TextColor3 = Color3.fromRGB(0, 0, 0)
-    title.TextScaled = true
-    title.Font = Enum.Font.GothamBold
-    title.Parent = mainFrame
-
-    -- Кнопка закрытия
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 40, 0, 40)
-    closeBtn.Position = UDim2.new(1, -45, 0, 0)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-    closeBtn.Text = "✕"
-    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.TextScaled = true
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.Parent = mainFrame
-    closeBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
-    end)
-
-    -- Кнопка копирования
-    local copyBtn = Instance.new("TextButton")
-    copyBtn.Size = UDim2.new(0, 120, 0, 30)
-    copyBtn.Position = UDim2.new(0, 20, 0, 50)
-    copyBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-    copyBtn.Text = "📋 КОПИРОВАТЬ"
-    copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    copyBtn.TextScaled = true
-    copyBtn.Font = Enum.Font.GothamBold
-    copyBtn.Parent = mainFrame
-    copyBtn.MouseButton1Click:Connect(function()
-        local success, err = pcall(function()
-            setclipboard(fullOutput)
+    local closeBtn = sellFrame:FindFirstChild("Close") or
+                     sellFrame:FindFirstChild("CloseButton") or
+                     sellFrame:FindFirstChild("X")
+    if closeBtn then
+        local x, y = GetClickPosition(closeBtn)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+            task.wait(0.01)
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
         end)
-        if success then
-            copyBtn.Text = "✅ СКОПИРОВАНО!"
-            task.wait(2)
-            copyBtn.Text = "📋 КОПИРОВАТЬ"
-        else
-            copyBtn.Text = "❌ ОШИБКА"
-            task.wait(2)
-            copyBtn.Text = "📋 КОПИРОВАТЬ"
-        end
-    end)
-
-    -- Кнопка сохранения в файл
-    local saveBtn = Instance.new("TextButton")
-    saveBtn.Size = UDim2.new(0, 150, 0, 30)
-    saveBtn.Position = UDim2.new(0, 160, 0, 50)
-    saveBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
-    saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
-    saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    saveBtn.TextScaled = true
-    saveBtn.Font = Enum.Font.GothamBold
-    saveBtn.Parent = mainFrame
-    saveBtn.MouseButton1Click:Connect(function()
-        local success, err = pcall(function()
-            writefile("123/decoded_script.lua", fullOutput)
+        pcall(function()
+            sellFrame.Visible = false
         end)
-        if success then
-            saveBtn.Text = "✅ СОХРАНЕНО!"
-            task.wait(2)
-            saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
-        else
-            saveBtn.Text = "❌ ОШИБКА"
-            task.wait(2)
-            saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+    end
+end
+
+local function WaitForSellFrameClosed()
+    local mainUI = PlayerGui:FindFirstChild("MainGameUI")
+    if not mainUI then return true end
+    for i = 1, 40 do
+        local sellFrame = mainUI:FindFirstChild("SellSlimeFrame")
+        if not sellFrame or not sellFrame.Visible then
+            return true
         end
-    end)
-
-    -- Кнопка закрыть окно
-    local closeAllBtn = Instance.new("TextButton")
-    closeAllBtn.Size = UDim2.new(0, 150, 0, 30)
-    closeAllBtn.Position = UDim2.new(1, -170, 0, 50)
-    closeAllBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-    closeAllBtn.Text = "❌ ЗАКРЫТЬ ОКНО"
-    closeAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeAllBtn.TextScaled = true
-    closeAllBtn.Font = Enum.Font.GothamBold
-    closeAllBtn.Parent = mainFrame
-    closeAllBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
-    end)
-
-    -- Область с прокруткой
-    local scrollFrame = Instance.new("ScrollingFrame")
-    scrollFrame.Size = UDim2.new(1, -20, 1, -110)
-    scrollFrame.Position = UDim2.new(0, 10, 0, 95)
-    scrollFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    scrollFrame.BorderSizePixel = 1
-    scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-    scrollFrame.Parent = mainFrame
-    scrollFrame.ScrollBarThickness = 12
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, -10, 0, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.Text = fullOutput
-    textLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
-    textLabel.TextXAlignment = Enum.TextXAlignment.Left
-    textLabel.TextYAlignment = Enum.TextYAlignment.Top
-    textLabel.TextWrapped = true
-    textLabel.TextScaled = false
-    textLabel.Font = Enum.Font.Code
-    textLabel.Parent = scrollFrame
-
-    -- Подгоняем высоту
-    local function updateTextHeight()
-        local lines = fullOutput:split("\n")
-        local lineCount = #lines
-        local lineHeight = 16
-        local height = lineCount * lineHeight + 20
-        textLabel.Size = UDim2.new(1, -10, 0, height)
-        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, height)
+        ClickCloseButton()
+        task.wait(0.2)
     end
-    updateTextHeight()
-
-    -- Информационная строка
-    local infoLabel = Instance.new("TextLabel")
-    infoLabel.Size = UDim2.new(1, 0, 0, 20)
-    infoLabel.Position = UDim2.new(0, 0, 1, -25)
-    infoLabel.BackgroundTransparency = 1
-    infoLabel.Text = "Расшифровка завершена. Код доступен для копирования и сохранения."
-    infoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-    infoLabel.TextSize = 12
-    infoLabel.Font = Enum.Font.Gotham
-    infoLabel.Parent = mainFrame
-
-    oldPrint("✅ GUI успешно создан и отображается в игре!")
-    return true
+    return false
 end
 
--- Пытаемся создать GUI с повторными попытками
-local maxAttempts = 10
-local attempts = 0
-local guiCreated = false
-while not guiCreated and attempts < maxAttempts do
-    attempts = attempts + 1
-    oldPrint("Попытка создать GUI #" .. attempts)
-    guiCreated = createGUI()
-    if not guiCreated then
-        task.wait(1)
+local function StartFarming()
+    isFarming = not isFarming
+
+    if isFarming then
+        FarmButton.Text = "[ FARM: ACTIVE ]"
+        FarmButton.BackgroundColor3 = Color3.fromRGB(15, 25, 30)
+        FarmStroke.Color = Color3.fromRGB(0, 150, 255)
+        isJumping = false
+
+        TeleportToStart()
+
+        local invConn = InventoryUpdate.OnClientEvent:Connect(function(data)
+            if type(data) == "table" then
+                currentInventory = data
+            end
+        end)
+
+        local jumpConn = JumpLuckStart.OnClientEvent:Connect(function()
+            if not isFarming then return end
+            isJumping = true
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            local root = GetRootPart()
+            if root then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+            end
+            MoveToPosition(TARGET_POSITION)
+            isJumping = false
+        end)
+
+        local endBoxConn = EndBoxReveal.OnClientEvent:Connect(function()
+            if not isFarming or isJumping then return end
+            isJumping = true
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+
+            local waitCount = 0
+            while (not currentInventory or #currentInventory == 0) and waitCount < 30 do
+                task.wait(0.15)
+                waitCount = waitCount + 1
+            end
+
+            if currentInventory and #currentInventory > 0 then
+                for _, item in ipairs(currentInventory) do
+                    local rarity = tostring(item.Rarity or ""):upper()
+                    local index = item.InventoryIndex
+                    if index and RARITY_FILTERS[rarity] == true then
+                        pcall(function()
+                            SellSlimeAction:FireServer("Sell", index)
+                            task.wait(0.05)
+                        end)
+                    end
+                end
+            end
+
+            task.wait(0.5)
+            WaitForSellFrameClosed()
+            task.wait(0.5)
+            isJumping = false
+        end)
+
+        local moveThread = task.spawn(function()
+            while isFarming do
+                if isJumping then
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+                    task.wait(0.3)
+                else
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.W, false, game)
+                    task.wait(math.random(15, 25) / 10)
+                    if not isJumping then
+                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+                        task.wait(math.random(5, 15) / 10)
+                    end
+                end
+            end
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+        end)
+
+        local clickThread = task.spawn(function()
+            while isFarming do
+                if isJumping then
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                    task.wait(0.3)
+                else
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    task.wait(0.02)
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                    task.wait(0.12)
+                end
+            end
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        end)
+
+        _G._farmThreads = {
+            move = moveThread,
+            click = clickThread,
+            inv = invConn,
+            jump = jumpConn,
+            endBox = endBoxConn
+        }
+
+    else
+        FarmButton.Text = "[ FARM: OFF ]"
+        FarmButton.BackgroundColor3 = Color3.fromRGB(18, 15, 22)
+        FarmStroke.Color = Color3.fromRGB(255, 50, 80)
+        isJumping = false
+
+        if _G._farmThreads then
+            if _G._farmThreads.move then task.cancel(_G._farmThreads.move) end
+            if _G._farmThreads.click then task.cancel(_G._farmThreads.click) end
+            if _G._farmThreads.inv then _G._farmThreads.inv:Disconnect() end
+            if _G._farmThreads.jump then _G._farmThreads.jump:Disconnect() end
+            if _G._farmThreads.endBox then _G._farmThreads.endBox:Disconnect() end
+            _G._farmThreads = nil
+        end
+
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game)
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
     end
 end
 
-if guiCreated then
-    oldPrint("✅ Деобфускатор с GUI успешно загружен!")
-else
-    oldPrint("❌ Не удалось создать GUI после " .. maxAttempts .. " попыток.")
-    oldPrint("Но полный расшифрованный код сохранён в _G.DECODED_OUTPUT")
-    oldPrint("Используй print(_G.DECODED_OUTPUT) для вывода в консоль.")
-end
+FarmButton.MouseButton1Click:Connect(StartFarming)
+
+StartFarming()
+
+print("✅ MEGA RAMP FOR SLIME загружена!")
+print("Используйте кнопку [ FARM ] для включения/выключения.")
+print("Фильтры редкостей настраиваются через [ RARITIES >> ].")
