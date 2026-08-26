@@ -1,15 +1,15 @@
--- ================================================================
--- MEGA RAMP FOR SLIME — УНИВЕРСАЛЬНЫЙ ПРОХОД ВСЕХ ЗОН
--- Версия 2.0 (автоматическое сканирование и телепорт)
--- Достигает X = 1 000 000+ за счёт прохода по всем зонам
--- ================================================================
 
--- Удаляем старый GUI
+-- Recovered by decoding the string table and executing the VM in an isolated stubbed Roblox environment.
+-- NOTE: the LastZone car-moving subroutine remains partially virtualized; known behavior is preserved/commented below.
+
+-- Remove an old copy of the UI if it is already present.
 local CoreGui = game:GetService("CoreGui")
 local oldGui = CoreGui:FindFirstChild("ToraScript")
-if oldGui then oldGui:Destroy() end
+if oldGui then
+    oldGui:Destroy()
+end
 
--- Подключаем библиотеку UI
+-- External UI library used by the script.
 local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/liebertsx/Tora-Library/main/src/librarynew",
     true
@@ -17,132 +17,51 @@ local Library = loadstring(game:HttpGet(
 
 local Window = Library:CreateWindow("MEGA RAMP FOR SLIME")
 
--- === Функция получения текущего X (из игры) ===
-local function GetCurrentX()
-    local player = game.Players.LocalPlayer
-    local stats = player:FindFirstChild("leaderstats")
-    if stats then
-        local xStat = stats:FindFirstChild("X")
-        if xStat and xStat:IsA("IntValue") then
-            return xStat.Value
-        end
-    end
-    local gui = player:FindFirstChild("PlayerGui")
-    if gui then
-        for _, screen in ipairs(gui:GetChildren()) do
-            if screen:IsA("ScreenGui") then
-                for _, child in ipairs(screen:GetDescendants()) do
-                    if child:IsA("TextLabel") or child:IsA("TextButton") then
-                        local txt = child.Text or ""
-                        local num = tonumber(txt:match("(%d+)"))
-                        if num and num > 100 then
-                            return num
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return 0
-end
-
--- === Глобальные переменные ===
-_G.LastZone = false
-_G.Equip = false
-_G.MaxX = 1000000
-
--- === Функция поиска всех зон ===
-local function FindAllZones()
-    local zones = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local name = obj.Name:lower()
-            -- Ищем по ключевым словам (можно расширить)
-            if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") or name:find("slime") then
-                table.insert(zones, obj)
-            end
-        end
-    end
-    -- Сортируем по оси Z (или X — смотри, как расположена рампа)
-    table.sort(zones, function(a, b)
-        return a.Position.Z < b.Position.Z
-    end)
-    return zones
-end
-
--- === НОВАЯ ФУНКЦИЯ: проход по всем зонам ===
-local function PassAllZones()
-    local zones = FindAllZones()
-    if #zones == 0 then
-        print("[WARN] Зоны не найдены. Проверь имена объектов.")
-        return
-    end
-    print("[INFO] Найдено зон: " .. #zones)
-
-    local player = game.Players.LocalPlayer
-    local character = player.Character
-    if not character then
-        print("[ERROR] Персонаж не найден.")
-        return
-    end
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then
-        print("[ERROR] HumanoidRootPart не найден.")
-        return
-    end
-
-    -- Отключаем столкновения (Noclip), чтобы не застревать
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
-        end
-    end
-
-    -- Проходим по каждой зоне
-    for i, zone in ipairs(zones) do
-        if not _G.LastZone then break end  -- если выключили вручную
-
-        local pos = zone.Position + Vector3.new(0, 2, 0) -- чуть выше, чтобы не застрять
-        root.CFrame = CFrame.new(pos)
-        wait(0.001)  -- минимальная задержка, чтобы игра засчитала прохождение
-
-        -- Проверяем X (опционально)
-        local currentX = GetCurrentX()
-        if currentX >= _G.MaxX then
-            print("[INFO] Достигнут лимит X = " .. _G.MaxX .. ", остановка.")
-            _G.LastZone = false
-            break
-        end
-
-        -- Прогресс (каждые 100 зон)
-        if i % 100 == 0 then
-            print("[PROGRESS] Пройдено зон: " .. i .. ", текущий X: " .. currentX)
-        end
-    end
-
-    print("[DONE] Все зоны пройдены! Финальный X: " .. GetCurrentX())
-end
-
--- === Функция LastZone (запускает проход по зонам в цикле) ===
+-- Instant LastZone worker.
+-- Confirmed actions from the virtualized body:
+--   * loops while _G.LastZone is enabled;
+--   * moves LocalPlayer.Character.HumanoidRootPart to workspace.Progetto.CarSpawn.CFrame;
+--   * scans workspace:GetChildren();
+--   * reads every object's Name and game.Players.LocalPlayer.Name (used to locate the player's object/car);
+--   * accesses workspace.Progetto.JumpCar;
+--   * the remaining VM branch contains SetPrimaryPartCFrame/CFrame operations used to move the car/advance the jump.
 local function LastZone()
     while _G.LastZone do
-        PassAllZones()
-        wait(1)  -- если закончились зоны, подождём и повторим (на случай появления новых)
+        local player = game.Players.LocalPlayer
+        local character = player.Character
+
+        character.HumanoidRootPart.CFrame = workspace.Progetto.CarSpawn.CFrame
+
+        local playerObject
+        for _, object in ipairs(workspace:GetChildren()) do
+            if object.Name == player.Name then
+                playerObject = object
+            end
+        end
+
+        local jumpCar = workspace.Progetto.JumpCar
+
+        -- The obfuscated VM continues with car CFrame manipulation here.
+        -- Runtime tracing confirms SetPrimaryPartCFrame, CFrame and wait(0.2)
+        -- are part of this path. It is intentionally not guessed as exact source.
+        if not _G.LastZone then
+            break
+        end
     end
 end
 
--- === Функция Equip Best (без изменений) ===
+-- Equip Best worker: this part was recovered exactly at the behavior level.
 local function Equip()
     while _G.Equip do
         game:GetService("ReplicatedStorage")
             .Remotes
             .EquipBestInventory
             :FireServer()
+
         wait(2)
     end
 end
 
--- === UI элементы ===
 Window:AddToggle({
     text = "Instant LastZone",
     flag = "toggle",
@@ -150,6 +69,7 @@ Window:AddToggle({
     callback = function(value)
         _G.LastZone = value
         print("LastZone: ", value)
+
         if value then
             spawn(LastZone)
         end
@@ -163,34 +83,15 @@ Window:AddToggle({
     callback = function(value)
         _G.Equip = value
         print("Equip: ", value)
+
         if value then
             spawn(Equip)
         end
     end,
 })
 
-Window:AddSlider({
-    text = "Max X Limit",
-    min = 1000,
-    max = 5000000,
-    value = 1000000,
-    float = 1,
-    callback = function(value)
-        _G.MaxX = value
-        print("Max X установлен: ", value)
-    end,
-})
-
 Window:AddLabel({
-    text = "YouTube: RACELL",
+    text = "YouTube: Tora IsMe",
 })
 
 Library:Init()
-
--- Отладка
-spawn(function()
-    while true do
-        wait(5)
-        print("[DEBUG] Текущий X: ", GetCurrentX())
-    end
-end)
