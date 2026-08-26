@@ -1,5 +1,5 @@
--- АНАЛИЗАТОР С ОКНОМ (DRAWING) + ЗАПАСНОЙ ВАРИАНТ
--- Работает в Synapse, Krnl, ScriptWare и других с поддержкой Drawing
+-- РАСШИРЕННЫЙ АНАЛИЗАТОР (сбор всех координат и объектов)
+-- Окно Drawing, кнопки Старт/Стоп/Копировать
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,32 +12,13 @@ local RootPart = Character:WaitForChild("HumanoidRootPart")
 local hasDrawing = pcall(function() return Drawing.new("Square") end)
 if not hasDrawing then
     warn("Drawing не поддерживается! Используй чат-команды: /start, /stop, /copy")
-    -- Загружаем упрощённый вариант через чат (код из предыдущего сообщения)
-    -- Но для краткости я вызову отдельный скрипт
-    loadstring([[
-        local function startChatMode()
-            local collecting = false
-            local data = {positions={}, zones={}, xChanges={}, keyLogs={}, startTime=nil, endTime=nil, finalX=0}
-            local lastX, timer, connections = 0, 0, {}
-            local function getX() ... end -- (опустим для краткости, но полный код будет)
-            -- Здесь полный код чат-режима, но чтобы не раздувать, я просто выведу инструкцию
-            print("Используйте /start, /stop, /copy в чате.")
-        end
-        startChatMode()
-    ]])()
+    -- Запасной вариант через чат (код из прошлого сообщения, но можно просто вывести инструкцию)
+    print("Используйте команды в чате: /start, /stop, /copy")
     return
 end
 
 -- === НАСТРОЙКИ ОКНА ===
-local window = {
-    x = 200,
-    y = 100,
-    w = 500,
-    h = 400,
-    title = "🔍 АНАЛИЗАТОР",
-}
-
--- Создание элементов Drawing
+local window = { x = 150, y = 80, w = 600, h = 500 }
 local function createRect(x, y, w, h, color, transparency)
     local rect = Drawing.new("Square")
     rect.Position = Vector2.new(x, y)
@@ -49,7 +30,6 @@ local function createRect(x, y, w, h, color, transparency)
     rect.ZIndex = 10
     return rect
 end
-
 local function createText(x, y, text, size, color, center)
     local txt = Drawing.new("Text")
     txt.Position = Vector2.new(x, y)
@@ -62,53 +42,52 @@ local function createText(x, y, text, size, color, center)
 end
 
 -- Фон окна
-local bg = createRect(window.x, window.y, window.w, window.h, Color3.fromRGB(20,20,40), 0.9)
+local bg = createRect(window.x, window.y, window.w, window.h, Color3.fromRGB(15,15,30), 0.92)
 bg.Visible = true
-
--- Заголовок
-local titleText = createText(window.x + 10, window.y + 5, window.title, 20, Color3.fromRGB(0,200,255), false)
+local titleText = createText(window.x + 10, window.y + 5, "🔍 АНАЛИЗАТОР (расширенный)", 20, Color3.fromRGB(0,220,255), false)
 
 -- Кнопки
-local btnStart = createRect(window.x + 20, window.y + 40, 100, 30, Color3.fromRGB(0,200,0), 1)
-local btnStartText = createText(window.x + 70, window.y + 48, "СТАРТ", 16, Color3.fromRGB(0,0,0), true)
+local btnStart = createRect(window.x + 20, window.y + 40, 110, 32, Color3.fromRGB(0,200,0), 1)
+local btnStartText = createText(window.x + 75, window.y + 48, "СТАРТ", 16, Color3.fromRGB(0,0,0), true)
+local btnStop = createRect(window.x + 150, window.y + 40, 110, 32, Color3.fromRGB(200,0,0), 1)
+local btnStopText = createText(window.x + 205, window.y + 48, "СТОП", 16, Color3.fromRGB(255,255,255), true)
+local btnCopy = createRect(window.x + 280, window.y + 40, 130, 32, Color3.fromRGB(50,50,180), 1)
+local btnCopyText = createText(window.x + 345, window.y + 48, "КОПИРОВАТЬ", 16, Color3.fromRGB(255,255,255), true)
 
-local btnStop = createRect(window.x + 140, window.y + 40, 100, 30, Color3.fromRGB(200,0,0), 1)
-local btnStopText = createText(window.x + 190, window.y + 48, "СТОП", 16, Color3.fromRGB(255,255,255), true)
-
-local btnCopy = createRect(window.x + 260, window.y + 40, 120, 30, Color3.fromRGB(50,50,150), 1)
-local btnCopyText = createText(window.x + 320, window.y + 48, "КОПИРОВАТЬ", 16, Color3.fromRGB(255,255,255), true)
-
--- Область логов (прямоугольник и текст)
-local logBg = createRect(window.x + 10, window.y + 90, window.w - 20, window.h - 110, Color3.fromRGB(0,0,0), 0.7)
+-- Область логов (прокрутка не реализована, но будем обрезать до 50 строк)
+local logBg = createRect(window.x + 10, window.y + 90, window.w - 20, window.h - 130, Color3.fromRGB(0,0,0), 0.7)
 logBg.Visible = true
-local logTextObj = createText(window.x + 20, window.y + 100, "Логи будут здесь...", 14, Color3.fromRGB(200,200,255), false)
+local logTextObj = createText(window.x + 20, window.y + 100, "", 13, Color3.fromRGB(200,220,255), false)
 logTextObj.Visible = true
 
--- Строка состояния
-local statusText = createText(window.x + 20, window.y + window.h - 20, "Готов к работе", 14, Color3.fromRGB(200,200,100), false)
+-- Статус
+local statusText = createText(window.x + 20, window.y + window.h - 30, "Готов", 14, Color3.fromRGB(200,200,100), false)
 
--- Переменные состояния
+-- Переменные сбора
 local collecting = false
-local analysisData = {positions={}, zones={}, xChanges={}, keyLogs={}, startTime=nil, endTime=nil, finalX=0}
+local data = {
+    positions = {},       -- все точки траектории
+    objects = {},         -- все уникальные объекты (части) рядом с игроком
+    xChanges = {},        -- изменения X
+    keyLogs = {},         -- нажатия клавиш
+    startTime = nil,
+    endTime = nil,
+    finalX = 0,
+}
 local lastX = 0
 local timer = 0
 local connections = {}
-local logLines = {"Ожидание команд..."}
-
--- Функция обновления лога
-local function updateLog()
-    local text = table.concat(logLines, "\n")
-    logTextObj.Text = text
-end
+local logLines = {"▶ Нажми СТАРТ, поезжай, затем СТОП."}
+local maxLogLines = 50
 
 local function addLogLine(line)
     table.insert(logLines, line)
-    if #logLines > 30 then table.remove(logLines, 1) end
-    updateLog()
+    if #logLines > maxLogLines then table.remove(logLines, 1) end
+    logTextObj.Text = table.concat(logLines, "\n")
 end
 
--- Функция получения X
 local function getCurrentX()
+    -- Из GUI
     for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
         if gui:IsA("ScreenGui") then
             for _, child in ipairs(gui:GetDescendants()) do
@@ -120,6 +99,7 @@ local function getCurrentX()
             end
         end
     end
+    -- Из leaderstats
     local stats = LocalPlayer:FindFirstChild("leaderstats")
     if stats then
         local xStat = stats:FindFirstChild("X")
@@ -128,110 +108,150 @@ local function getCurrentX()
     return 0
 end
 
--- Обработка кликов по кнопкам
+-- Функция поиска всех объектов в радиусе (запоминаем уникальные)
+local function scanNearbyObjects()
+    if not RootPart then return end
+    local pos = RootPart.Position
+    local radius = 50 -- увеличенный радиус
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            local dist = (obj.Position - pos).Magnitude
+            if dist < radius then
+                local key = obj.Name .. "_" .. tostring(obj.Position)
+                if not data.objects[key] then
+                    data.objects[key] = {
+                        name = obj.Name,
+                        className = obj.ClassName,
+                        position = { x = obj.Position.X, y = obj.Position.Y, z = obj.Position.Z },
+                        firstSeen = os.time()
+                    }
+                    -- Выводим в лог только первые 10 объектов, чтобы не забивать
+                    if #data.objects <= 10 then
+                        addLogLine("Объект: " .. obj.Name .. " (" .. string.format("%.1f", obj.Position.X) .. ", " .. string.format("%.1f", obj.Position.Y) .. ", " .. string.format("%.1f", obj.Position.Z) .. ")")
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Сбор данных (запускается по кнопке)
+local function startCollection()
+    if collecting then return end
+    collecting = true
+    data = { positions={}, objects={}, xChanges={}, keyLogs={}, startTime=os.time(), endTime=nil, finalX=0 }
+    lastX = getCurrentX()
+    addLogLine("▶ АНАЛИЗ ЗАПУЩЕН. Начальный X: " .. lastX)
+    statusText.Text = "Сбор..."
+
+    connections.heartbeat = RunService.Heartbeat:Connect(function(dt)
+        if not collecting then return end
+        timer = timer + dt
+        if timer >= 0.05 then -- каждые 0.05 сек
+            timer = 0
+            if not RootPart then return end
+            local pos = RootPart.Position
+            local x = getCurrentX()
+            -- Запись позиции
+            table.insert(data.positions, { x=pos.X, y=pos.Y, z=pos.Z, time=os.time(), xVal=x })
+            -- Проверка изменения X
+            if x ~= lastX then
+                table.insert(data.xChanges, { from=lastX, to=x, pos={ x=pos.X, y=pos.Y, z=pos.Z }, time=os.time() })
+                addLogLine("X: " .. lastX .. " → " .. x)
+                lastX = x
+            end
+            -- Сканирование объектов рядом
+            scanNearbyObjects()
+        end
+    end)
+
+    connections.keys = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not collecting then return end
+        if gameProcessed then return end
+        local key = input.KeyCode.Name
+        table.insert(data.keyLogs, { key=key, time=os.time() })
+        -- Выводим только если это не повторяющиеся W/A/S/D (для краткости)
+        if key ~= "W" and key ~= "A" and key ~= "S" and key ~= "D" then
+            addLogLine("Клавиша: " .. key)
+        end
+    end)
+end
+
+local function stopCollection()
+    if not collecting then return end
+    collecting = false
+    data.endTime = os.time()
+    data.finalX = getCurrentX()
+    if connections.heartbeat then connections.heartbeat:Disconnect() end
+    if connections.keys then connections.keys:Disconnect() end
+    addLogLine("⏹ АНАЛИЗ ОСТАНОВЛЕН. Финальный X: " .. data.finalX)
+    addLogLine("Найдено объектов: " .. #data.objects)
+    addLogLine("Всего точек: " .. #data.positions)
+    statusText.Text = "Остановлен. Нажми КОПИРОВАТЬ."
+end
+
+-- Генерация отчёта
+local function generateReport()
+    if not data.startTime then return nil end
+    local report = "=== РАСШИРЕННЫЙ АНАЛИЗ ИГРЫ ===\n"
+    report = report .. "Начало: " .. os.date("%H:%M:%S", data.startTime) .. "\n"
+    if data.endTime then
+        report = report .. "Конец: " .. os.date("%H:%M:%S", data.endTime) .. "\n"
+        report = report .. "Длительность: " .. (data.endTime - data.startTime) .. " сек\n"
+    end
+    report = report .. "Финальный X: " .. data.finalX .. "\n"
+    report = report .. "Всего точек траектории: " .. #data.positions .. "\n"
+    report = report .. "Всего изменений X: " .. #data.xChanges .. "\n"
+    report = report .. "Всего уникальных объектов рядом: " .. #data.objects .. "\n\n"
+
+    report = report .. "=== СПИСОК ОБЪЕКТОВ (координаты) ===\n"
+    for _, obj in pairs(data.objects) do
+        report = report .. "  " .. obj.name .. " (" .. obj.className .. ") -> (" 
+        .. string.format("%.1f", obj.position.x) .. ", " 
+        .. string.format("%.1f", obj.position.y) .. ", " 
+        .. string.format("%.1f", obj.position.z) .. ")\n"
+    end
+
+    -- Добавим несколько точек траектории для примера (каждую 10-ю)
+    report = report .. "\n=== ПРИМЕРНЫЕ ТОЧКИ ТРАЕКТОРИИ (каждая 10-я) ===\n"
+    for i = 1, #data.positions, 10 do
+        local p = data.positions[i]
+        report = report .. string.format("  (%.1f, %.1f, %.1f)  X=%d\n", p.x, p.y, p.z, p.xVal or 0)
+    end
+
+    report = report .. "=== КОНЕЦ ==="
+    return report
+end
+
+-- Обработка кликов
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
     local mousePos = UserInputService:GetMouseLocation()
 
-    -- Проверка попадания в кнопку Старт
+    -- Кнопка Старт
     if mousePos.X >= btnStart.Position.X and mousePos.X <= btnStart.Position.X + btnStart.Size.X and
        mousePos.Y >= btnStart.Position.Y and mousePos.Y <= btnStart.Position.Y + btnStart.Size.Y then
-        if collecting then
-            addLogLine("Уже собираем.")
-            return
-        end
-        collecting = true
-        analysisData = {positions={}, zones={}, xChanges={}, keyLogs={}, startTime=os.time(), endTime=nil, finalX=0}
-        lastX = getCurrentX()
-        addLogLine("▶ АНАЛИЗ ЗАПУЩЕН. Начальный X: " .. lastX)
-        statusText.Text = "Идёт сбор..."
-        -- Подписки
-        connections.heartbeat = RunService.Heartbeat:Connect(function(dt)
-            if not collecting then return end
-            timer = timer + dt
-            if timer >= 0.1 then
-                timer = 0
-                if not RootPart then return end
-                local pos = RootPart.Position
-                local x = getCurrentX()
-                table.insert(analysisData.positions, {x=pos.X, y=pos.Y, z=pos.Z, time=os.time(), xVal=x})
-                if x ~= lastX then
-                    table.insert(analysisData.xChanges, {from=lastX, to=x, pos={x=pos.X, y=pos.Y, z=pos.Z}, time=os.time()})
-                    addLogLine("X: " .. lastX .. " → " .. x)
-                    lastX = x
-                end
-                -- Поиск зон
-                for _, part in ipairs(workspace:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        local dist = (part.Position - RootPart.Position).Magnitude
-                        if dist < 15 then
-                            local name = part.Name:lower()
-                            if name:find("zone") or name:find("trigger") or name:find("checkpoint") or name:find("ramp") then
-                                local key = part.Name .. "_" .. tostring(part.Position)
-                                if not analysisData.zones[key] then
-                                    analysisData.zones[key] = {name = part.Name, pos = {x=part.Position.X, y=part.Position.Y, z=part.Position.Z}}
-                                    addLogLine("Зона: " .. part.Name .. " (" .. string.format("%.1f", part.Position.X) .. ", " .. string.format("%.1f", part.Position.Y) .. ", " .. string.format("%.1f", part.Position.Z) .. ")")
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-        connections.keys = UserInputService.InputBegan:Connect(function(input, gp)
-            if not collecting then return end
-            if gp then return end
-            local key = input.KeyCode.Name
-            table.insert(analysisData.keyLogs, {key=key, time=os.time()})
-            addLogLine("Клавиша: " .. key)
-        end)
+        startCollection()
         return
     end
 
     -- Кнопка Стоп
     if mousePos.X >= btnStop.Position.X and mousePos.X <= btnStop.Position.X + btnStop.Size.X and
        mousePos.Y >= btnStop.Position.Y and mousePos.Y <= btnStop.Position.Y + btnStop.Size.Y then
-        if not collecting then
-            addLogLine("Анализ не запущен.")
-            return
-        end
-        collecting = false
-        analysisData.endTime = os.time()
-        analysisData.finalX = getCurrentX()
-        if connections.heartbeat then connections.heartbeat:Disconnect() end
-        if connections.keys then connections.keys:Disconnect() end
-        addLogLine("⏹ АНАЛИЗ ОСТАНОВЛЕН. Финальный X: " .. analysisData.finalX)
-        addLogLine("Найдено зон: " .. #analysisData.zones .. ", изменений X: " .. #analysisData.xChanges)
-        statusText.Text = "Остановлен. Нажми КОПИРОВАТЬ."
+        stopCollection()
         return
     end
 
     -- Кнопка Копировать
     if mousePos.X >= btnCopy.Position.X and mousePos.X <= btnCopy.Position.X + btnCopy.Size.X and
        mousePos.Y >= btnCopy.Position.Y and mousePos.Y <= btnCopy.Position.Y + btnCopy.Size.Y then
-        if not analysisData.startTime then
-            addLogLine("Нет данных. Сначала запустите анализ.")
+        local report = generateReport()
+        if not report then
+            addLogLine("Нет данных. Запустите анализ.")
             return
         end
-        local report = "=== АНАЛИЗ ИГРЫ ===\n"
-        report = report .. "Начало: " .. os.date("%H:%M:%S", analysisData.startTime) .. "\n"
-        if analysisData.endTime then
-            report = report .. "Конец: " .. os.date("%H:%M:%S", analysisData.endTime) .. "\n"
-            report = report .. "Длительность: " .. (analysisData.endTime - analysisData.startTime) .. " сек\n"
-        end
-        report = report .. "Финальный X: " .. analysisData.finalX .. "\n"
-        report = report .. "Найдено зон: " .. #analysisData.zones .. "\n"
-        report = report .. "Изменений X: " .. #analysisData.xChanges .. "\n"
-        report = report .. "Всего точек: " .. #analysisData.positions .. "\n"
-        report = report .. "Нажатий клавиш: " .. #analysisData.keyLogs .. "\n\n"
-        report = report .. "СПИСОК ЗОН:\n"
-        for _, zone in pairs(analysisData.zones) do
-            report = report .. "  " .. zone.name .. " -> (" .. string.format("%.1f", zone.pos.x) .. ", " .. string.format("%.1f", zone.pos.y) .. ", " .. string.format("%.1f", zone.pos.z) .. ")\n"
-        end
-        report = report .. "=== КОНЕЦ ==="
-        addLogLine("📋 Отчёт сгенерирован.")
-        -- Копирование
+        addLogLine("📋 Отчёт сгенерирован. Копирую...")
         local success, err = pcall(function()
             setclipboard(report)
         end)
@@ -240,7 +260,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             statusText.Text = "Скопировано!"
         else
             addLogLine("❌ Ошибка копирования: " .. tostring(err))
-            addLogLine("Скопируйте текст ниже вручную:")
+            addLogLine("Скопируйте текст ниже:")
             addLogLine(report)
             statusText.Text = "Копируй вручную."
         end
@@ -248,18 +268,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Обновление позиции окна (можно перетаскивать, но для простоты оставим фиксированное)
--- Можно добавить перетаскивание позже
-
-addLogLine("✅ АНАЛИЗАТОР ЗАГРУЖЕН (DRAWING)")
-addLogLine("Нажми СТАРТ, поезжай, потом СТОП и КОПИРОВАТЬ.")
+-- Инициализация
+addLogLine("✅ АНАЛИЗАТОР ЗАГРУЖЕН")
+addLogLine("Нажми СТАРТ, поезжай, затем СТОП и КОПИРОВАТЬ.")
 statusText.Text = "Готов"
 
--- Очистка при завершении скрипта (опционально)
-game:GetService("RunService").Stepped:Connect(function()
-    if not hasDrawing then return end
-    -- Ничего не делаем, окно остаётся
-end)
-
--- Инструкция, если окно не появилось
-print("Если окно не появилось – используйте чат-команды: /start, /stop, /copy (запасной режим).")
+print("✅ Расширенный анализатор запущен. Окно должно появиться.")
