@@ -1,15 +1,25 @@
 
--- Recovered by decoding the string table and executing the VM in an isolated stubbed Roblox environment.
--- NOTE: the LastZone car-moving subroutine remains partially virtualized; known behavior is preserved/commented below.
+-- Rebuilt from the deobfuscated script.
+-- The farm searches the map for multiplier pads and moves the player's vehicle
+-- through them in ascending order up to x1,000,000 instead of stopping near x70,000.
 
--- Remove an old copy of the UI if it is already present.
+local TARGET_MULTIPLIER = 1000000
+local STEP_DELAY = 0.08
+local FARM_RESTART_DELAY = 0.6
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Remove an old copy of the UI.
 local oldGui = CoreGui:FindFirstChild("ToraScript")
 if oldGui then
     oldGui:Destroy()
 end
 
--- External UI library used by the script.
+-- Original UI library used by the obfuscated script.
 local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/liebertsx/Tora-Library/main/src/librarynew",
     true
@@ -17,77 +27,361 @@ local Library = loadstring(game:HttpGet(
 
 local Window = Library:CreateWindow("MEGA RAMP FOR SLIME")
 
--- Instant LastZone worker.
--- Confirmed actions from the virtualized body:
---   * loops while _G.LastZone is enabled;
---   * moves LocalPlayer.Character.HumanoidRootPart to workspace.Progetto.CarSpawn.CFrame;
---   * scans workspace:GetChildren();
---   * reads every object's Name and game.Players.LocalPlayer.Name (used to locate the player's object/car);
---   * accesses workspace.Progetto.JumpCar;
---   * the remaining VM branch contains SetPrimaryPartCFrame/CFrame operations used to move the car/advance the jump.
-local function LastZone()
-    while _G.LastZone do
-        local player = game.Players.LocalPlayer
-        local character = player.Character
+local function normalizeNumberText(text)
+    text = tostring(text or ""):upper()
+    text = text:gsub("%s+", "")
+    text = text:gsub(",", "")
+    text = text:gsub("%.", "")
+    return text
+end
 
-        character.HumanoidRootPart.CFrame = workspace.Progetto.CarSpawn.CFrame
+local function readMultiplier(text)
+    local t = normalizeNumberText(text)
 
-        local playerObject
-        for _, object in ipairs(workspace:GetChildren()) do
-            if object.Name == player.Name then
-                playerObject = object
+    -- Only treat strings that actually look like multiplier labels as zones.
+    -- Examples: X70000, x75000, X1000000.
+    if not t:find("X", 1, true) then
+        return nil
+    end
+
+    local digits = t:match("X(%d+)")
+    if not digits then
+        return nil
+    end
+
+    return tonumber(digits)
+end
+
+local function findBasePartForLabel(obj)
+    -- SurfaceGui / BillboardGui can point at a separate Adornee.
+    local current = obj
+    for _ = 1, 8 do
+        if not current then
+            break
+        end
+
+        if current:IsA("SurfaceGui") or current:IsA("BillboardGui") then
+            local ok, adornee = pcall(function()
+                return current.Adornee
+            end)
+            if ok and adornee and adornee:IsA("BasePart") then
+                return adornee
             end
         end
 
-        local jumpCar = workspace.Progetto.JumpCar
+        if current:IsA("BasePart") then
+            return current
+        end
 
-        -- The obfuscated VM continues with car CFrame manipulation here.
-        -- Runtime tracing confirms SetPrimaryPartCFrame, CFrame and wait(0.2)
-        -- are part of this path. It is intentionally not guessed as exact source.
-        if not _G.LastZone then
+        current = current.Parent
+    end
+
+    return nil
+end
+
+local function collectMultiplierPads()
+    local found = {}
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        local value
+        local part
+
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            local ok, text = pcall(function()
+                return obj.Text
+            end)
+            if ok then
+                value = readMultiplier(text)
+                if value then
+                    part = findBasePartForLabel(obj)
+                end
+            end
+        elseif obj:IsA("BasePart") then
+            value = readMultiplier(obj.Name)
+            if value then
+                part = obj
+            end
+        end
+
+        if value and part and value <= TARGET_MULTIPLIER then
+            -- One physical pad per multiplier is enough.
+            if not found[value] then
+                found[value] = part
+            end
+        end
+    end
+
+    local pads = {}
+    for value, part in pairs(found) do
+        table.insert(pads, {
+            multiplier = value,
+            part = part,
+        })
+    end
+
+    table.sort(pads, function(a, b)
+        return a.multiplier < b.multiplier
+    end)
+
+    return pads
+end
+
+local function getCharacter()
+    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+end
+
+local function teleportCharacterToSpawn()
+    local character = getCharacter()
+    local root = character:FindFirstChild("HumanoidRootPart")
+
+    local progetto = workspace:FindFirstChild("Progetto")
+    local carSpawn = progetto and progetto:FindFirstChild("CarSpawn")
+
+    if root and carSpawn and carSpawn:IsA("BasePart") then
+        root.CFrame = carSpawn.CFrame + Vector3.new(0, 3, 0)
+        return true
+    end
+
+    return false
+end
+
+local function looksLikeVehicle(model)
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    if model == LocalPlayer.Character then
+        return false
+    end
+
+    if model:FindFirstChildWhichIsA("VehicleSeat", true) then
+        return true
+    end
+
+    if model:FindFirstChildWhichIsA("Seat", true) then
+        return true
+    end
+
+    return false
+end
+
+local function findPlayerVehicle()
+    -- The original script scans workspace:GetChildren() and compares Name with
+    -- LocalPlayer.Name. Prefer a vehicle-like model with that name.
+    for _, object in ipairs(workspace:GetChildren()) do
+        if object.Name == LocalPlayer.Name and looksLikeVehicle(object) then
+            return object
+        end
+    end
+
+    -- Some versions of the game may place the car under another container.
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if object.Name == LocalPlayer.Name and looksLikeVehicle(object) then
+            return object
+        end
+    end
+
+    -- Fallback: any nearby vehicle model, excluding the character.
+    for _, object in ipairs(workspace:GetDescendants()) do
+        if looksLikeVehicle(object) then
+            local seat = object:FindFirstChildWhichIsA("VehicleSeat", true)
+            if seat and seat.Occupant then
+                local occupantCharacter = seat.Occupant.Parent
+                if occupantCharacter == LocalPlayer.Character then
+                    return object
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function getModelPart(model)
+    if not model then
+        return nil
+    end
+
+    if model:IsA("BasePart") then
+        return model
+    end
+
+    if model:IsA("Model") then
+        if model.PrimaryPart then
+            return model.PrimaryPart
+        end
+
+        local seat = model:FindFirstChildWhichIsA("VehicleSeat", true)
+        if seat then
+            return seat
+        end
+
+        return model:FindFirstChildWhichIsA("BasePart", true)
+    end
+
+    return nil
+end
+
+local function moveVehicleTo(vehicle, targetPart)
+    if not vehicle or not targetPart then
+        return false
+    end
+
+    -- Put the vehicle slightly above the multiplier pad so physics can settle
+    -- onto it and the game's touch logic can fire.
+    local targetCFrame = targetPart.CFrame * CFrame.new(0, (targetPart.Size.Y / 2) + 3, 0)
+
+    if vehicle:IsA("Model") then
+        local ok = pcall(function()
+            vehicle:PivotTo(targetCFrame)
+        end)
+        if ok then
+            return true
+        end
+
+        local part = getModelPart(vehicle)
+        if part then
+            if not vehicle.PrimaryPart then
+                pcall(function()
+                    vehicle.PrimaryPart = part
+                end)
+            end
+
+            local moved = pcall(function()
+                vehicle:SetPrimaryPartCFrame(targetCFrame)
+            end)
+            if moved then
+                return true
+            end
+        end
+    elseif vehicle:IsA("BasePart") then
+        vehicle.CFrame = targetCFrame
+        return true
+    end
+
+    return false
+end
+
+local function moveCharacterTo(targetPart)
+    local character = getCharacter()
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root or not targetPart then
+        return false
+    end
+
+    root.CFrame = targetPart.CFrame * CFrame.new(0, (targetPart.Size.Y / 2) + 3, 0)
+    return true
+end
+
+local function runToOneMillion()
+    teleportCharacterToSpawn()
+    task.wait(0.35)
+
+    local pads = collectMultiplierPads()
+    if #pads == 0 then
+        warn("[x1M] Multiplier pads were not found on the map")
+        return
+    end
+
+    local targetFound = false
+    for _, zone in ipairs(pads) do
+        if zone.multiplier == TARGET_MULTIPLIER then
+            targetFound = true
             break
+        end
+    end
+
+    if not targetFound then
+        warn("[x1M] x1000000 pad was not found yet; waiting for the map to load")
+        return
+    end
+
+    local vehicle = findPlayerVehicle()
+
+    -- Walk through every detected multiplier in order. This is more reliable
+    -- than jumping directly from a low multiplier to x1,000,000 because games
+    -- often award progression through touch/zone triggers.
+    for _, zone in ipairs(pads) do
+        if not _G.LastZone then
+            return
+        end
+
+        if zone.multiplier <= TARGET_MULTIPLIER then
+            local moved = false
+
+            if vehicle and vehicle.Parent then
+                moved = moveVehicleTo(vehicle, zone.part)
+            end
+
+            if not moved then
+                -- Fallback if the game does not expose the car as a movable model.
+                moveCharacterTo(zone.part)
+            end
+
+            if zone.multiplier == TARGET_MULTIPLIER then
+                print("[x1M] Reached x" .. tostring(TARGET_MULTIPLIER))
+                task.wait(0.25)
+                return
+            end
+
+            task.wait(STEP_DELAY)
         end
     end
 end
 
--- Equip Best worker: this part was recovered exactly at the behavior level.
+local function LastZone()
+    while _G.LastZone do
+        local ok, err = pcall(runToOneMillion)
+        if not ok then
+            warn("[x1M] Farm error:", err)
+        end
+        task.wait(FARM_RESTART_DELAY)
+    end
+end
+
 local function Equip()
     while _G.Equip do
-        game:GetService("ReplicatedStorage")
-            .Remotes
-            .EquipBestInventory
-            :FireServer()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        local equipRemote = remotes and remotes:FindFirstChild("EquipBestInventory")
 
-        wait(2)
+        if equipRemote then
+            equipRemote:FireServer()
+        end
+
+        task.wait(2)
     end
 end
 
 Window:AddToggle({
-    text = "Instant LastZone",
-    flag = "toggle",
+    text = "Instant LastZone [x1M]",
+    flag = "toggle_x1m",
     state = false,
     callback = function(value)
         _G.LastZone = value
-        print("LastZone: ", value)
+        print("LastZone x1M:", value)
 
         if value then
-            spawn(LastZone)
+            task.spawn(LastZone)
         end
     end,
 })
 
 Window:AddToggle({
     text = "Equip Best",
-    flag = "toggle",
+    flag = "toggle_equip",
     state = false,
     callback = function(value)
         _G.Equip = value
-        print("Equip: ", value)
+        print("Equip:", value)
 
         if value then
-            spawn(Equip)
+            task.spawn(Equip)
         end
     end,
+})
+
+Window:AddLabel({
+    text = "Target: x1,000,000",
 })
 
 Window:AddLabel({
