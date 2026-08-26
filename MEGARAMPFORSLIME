@@ -1,377 +1,224 @@
--- MEGA RAMP FOR SLIME
--- x1,000,000 version using the ORIGINAL recovered LastZone cycle.
--- Recovered original sequence:
---   HRP -> CarSpawn
---   wait(1)
---   find workspace child named LocalPlayer.Name .. "_Auto"
---   car -> Progetto.JumpCar.CFrame
---   wait(0.2)
---   car -> checkpoint CFrame
---   wait(0.2)
---   car -> final CFrame
---   wait(1)
---   OpenBoxClick:FireServer() x10
---   repeat
---
--- The old obfuscated script hardcoded Checkpoints["68"] and CFrame.new(-21,3,2101).
--- This build keeps the same cycle but resolves the x1,000,000 strip dynamically.
+-- ============================================================
+-- FLY SCRIPT + КООРДИНАТЫ
+-- Версия 1.0
+-- Включает режим полёта с управлением WASD + Пробел/Shift
+-- Показывает текущие координаты с точностью до 2 знаков
+-- ============================================================
 
-local TARGET_MULTIPLIER = 1000000
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local rootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CoreGui = game:GetService("CoreGui")
+-- Переменные состояния
+local flyEnabled = false
+local flySpeed = 50
+local bodyVelocity = nil
+local bodyGyro = nil
 
-local LocalPlayer = Players.LocalPlayer
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+-- Создаём GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FlyCoordGUI"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
 
--- Remove old Tora UI copy.
-local oldGui = CoreGui:FindFirstChild("ToraScript")
-if oldGui then
-    oldGui:Destroy()
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 240, 0, 180)
+mainFrame.Position = UDim2.new(0.5, -120, 0.5, -90)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+mainFrame.BorderSizePixel = 1
+mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+title.Text = "🛸 FLY + COORD"
+title.TextColor3 = Color3.fromRGB(0, 0, 0)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 0)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextScaled = true
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = mainFrame
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Кнопка включения полёта
+local flyBtn = Instance.new("TextButton")
+flyBtn.Size = UDim2.new(0, 100, 0, 30)
+flyBtn.Position = UDim2.new(0, 10, 0, 40)
+flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+flyBtn.Text = "ВКЛ"
+flyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+flyBtn.TextScaled = true
+flyBtn.Font = Enum.Font.GothamBold
+flyBtn.Parent = mainFrame
+
+-- Текст координат
+local coordLabel = Instance.new("TextLabel")
+coordLabel.Size = UDim2.new(1, -20, 0, 30)
+coordLabel.Position = UDim2.new(0, 10, 0, 85)
+coordLabel.BackgroundTransparency = 1
+coordLabel.Text = "X: 0.00  Y: 0.00  Z: 0.00"
+coordLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
+coordLabel.TextSize = 16
+coordLabel.Font = Enum.Font.Code
+coordLabel.Parent = mainFrame
+
+local speedSlider = Instance.new("TextBox")
+speedSlider.Size = UDim2.new(0, 80, 0, 25)
+speedSlider.Position = UDim2.new(0, 120, 0, 40)
+speedSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+speedSlider.Text = tostring(flySpeed)
+speedSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedSlider.TextSize = 14
+speedSlider.Font = Enum.Font.Gotham
+speedSlider.Parent = mainFrame
+speedSlider.FocusLost:Connect(function()
+    local val = tonumber(speedSlider.Text)
+    if val and val > 0 then
+        flySpeed = val
+    else
+        speedSlider.Text = tostring(flySpeed)
+    end
+end)
+
+-- Функция обновления координат
+local function updateCoordDisplay()
+    if not rootPart then return end
+    local pos = rootPart.Position
+    coordLabel.Text = string.format("X: %.2f  Y: %.2f  Z: %.2f", pos.X, pos.Y, pos.Z)
 end
 
-local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/liebertsx/Tora-Library/main/src/librarynew",
-    true
-))()
+-- Функция включения полёта
+local function enableFly()
+    if not character or not rootPart then return end
+    humanoid.PlatformStand = true
+    humanoid.AutoRotate = false
 
-local Window = Library:CreateWindow("MEGA RAMP FOR SLIME")
+    -- BodyVelocity для движения
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    bodyVelocity.P = 1e5
+    bodyVelocity.Parent = rootPart
 
-local function normalizeText(v)
-    return tostring(v or "")
-        :upper()
-        :gsub("%s+", "")
-        :gsub(",", "")
-        :gsub("%.", "")
+    -- BodyGyro для контроля ориентации
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    bodyGyro.P = 1e5
+    bodyGyro.CFrame = rootPart.CFrame
+    bodyGyro.Parent = rootPart
 end
 
-local function multiplierFromText(v)
-    local s = normalizeText(v)
-    local n = s:match("X(%d+)")
-    return n and tonumber(n) or nil
+-- Функция отключения полёта
+local function disableFly()
+    if bodyVelocity then bodyVelocity:Destroy() end
+    if bodyGyro then bodyGyro:Destroy() end
+    bodyVelocity = nil
+    bodyGyro = nil
+    humanoid.PlatformStand = false
+    humanoid.AutoRotate = true
 end
 
-local function getProgetto()
-    return workspace:FindFirstChild("Progetto")
-end
+-- Обработчик клика по кнопке
+flyBtn.MouseButton1Click:Connect(function()
+    flyEnabled = not flyEnabled
+    flyBtn.Text = flyEnabled and "ВЫКЛ" or "ВКЛ"
+    flyBtn.BackgroundColor3 = flyEnabled and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(60, 60, 80)
 
-local function partFromGui(guiObject)
-    local cur = guiObject
+    if flyEnabled then
+        enableFly()
+    else
+        disableFly()
+    end
+end)
 
-    for _ = 1, 12 do
-        if not cur then
-            return nil
-        end
+-- Обновление движения в каждом кадре
+local function updateFly()
+    if not flyEnabled then return end
+    if not character or not rootPart then return end
 
-        if cur:IsA("SurfaceGui") or cur:IsA("BillboardGui") then
-            local adornee = cur.Adornee
-            if adornee and adornee:IsA("BasePart") then
-                return adornee
-            end
-        end
+    local moveDirection = Vector3.new(0, 0, 0)
+    local camera = workspace.CurrentCamera
+    local forward = camera.CFrame.LookVector
+    local right = camera.CFrame.RightVector
+    local up = camera.CFrame.UpVector
 
-        if cur:IsA("BasePart") then
-            return cur
-        end
-
-        cur = cur.Parent
+    -- WASD
+    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then
+        moveDirection = moveDirection + forward
+    end
+    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then
+        moveDirection = moveDirection - forward
+    end
+    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then
+        moveDirection = moveDirection - right
+    end
+    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then
+        moveDirection = moveDirection + right
+    end
+    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then
+        moveDirection = moveDirection + up
+    end
+    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftShift) then
+        moveDirection = moveDirection - up
     end
 
-    return nil
-end
-
--- Locate the physical strip that displays x1,000,000.
--- This is done once/cached, NOT every frame.
-local cachedTargetPart = nil
-local function findTargetPart()
-    if cachedTargetPart and cachedTargetPart.Parent then
-        return cachedTargetPart
+    if moveDirection.Magnitude > 0 then
+        moveDirection = moveDirection.Unit * flySpeed
+    else
+        moveDirection = Vector3.new(0, 0, 0)
     end
 
-    local progetto = getProgetto()
-    local searchRoot = progetto or workspace
+    bodyVelocity.Velocity = moveDirection
 
-    for _, obj in ipairs(searchRoot:GetDescendants()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            local ok, text = pcall(function()
-                return obj.Text
-            end)
-
-            if ok and multiplierFromText(text) == TARGET_MULTIPLIER then
-                local part = partFromGui(obj)
-                if part then
-                    cachedTargetPart = part
-                    print("[x1M] Target strip:", part:GetFullName(), part.Position)
-                    return part
-                end
-            end
-        elseif obj:IsA("BasePart") then
-            if multiplierFromText(obj.Name) == TARGET_MULTIPLIER then
-                cachedTargetPart = obj
-                print("[x1M] Target part by name:", obj:GetFullName(), obj.Position)
-                return obj
-            end
-        end
-    end
-
-    return nil
-end
-
--- ORIGINAL car naming recovered from the obfuscated script.
-local function findAutoCar()
-    local wantedName = LocalPlayer.Name .. "_Auto"
-
-    for _, object in ipairs(workspace:GetChildren()) do
-        if object.Name == wantedName then
-            return object
-        end
-    end
-
-    return nil
-end
-
-local function getObjectCFrame(obj)
-    if not obj then
-        return nil
-    end
-
-    if obj:IsA("BasePart") then
-        return obj.CFrame
-    end
-
-    if obj:IsA("Model") then
-        if obj.PrimaryPart then
-            return obj.PrimaryPart.CFrame
-        end
-
-        local p = obj:FindFirstChildWhichIsA("BasePart", true)
-        if p then
-            return p.CFrame
-        end
-    end
-
-    return nil
-end
-
-local function getObjectPosition(obj)
-    local cf = getObjectCFrame(obj)
-    return cf and cf.Position or nil
-end
-
--- The old script uses Checkpoints["68"].
--- For x1M we select the checkpoint physically closest to the x1M strip.
-local cachedCheckpoint = nil
-local function findNearestCheckpoint(targetPart)
-    if cachedCheckpoint and cachedCheckpoint.Parent then
-        return cachedCheckpoint
-    end
-
-    local progetto = getProgetto()
-    local checkpoints = progetto and progetto:FindFirstChild("Checkpoints")
-    if not checkpoints or not targetPart then
-        return nil
-    end
-
-    local targetPos = targetPart.Position
-    local best, bestDistance = nil, math.huge
-
-    for _, cp in ipairs(checkpoints:GetChildren()) do
-        local pos = getObjectPosition(cp)
-        if pos then
-            local distance = (pos - targetPos).Magnitude
-            if distance < bestDistance then
-                bestDistance = distance
-                best = cp
-            end
-        end
-    end
-
-    if best then
-        cachedCheckpoint = best
-        print("[x1M] Nearest checkpoint:", best.Name, "distance:", bestDistance)
-    end
-
-    return best
-end
-
-local function setModelCFrame(model, cf)
-    if not model or not cf then
-        return false
-    end
-
-    -- The ORIGINAL script specifically calls SetPrimaryPartCFrame.
-    if model:IsA("Model") then
-        if not model.PrimaryPart then
-            local firstPart = model:FindFirstChildWhichIsA("BasePart", true)
-            if firstPart then
-                pcall(function()
-                    model.PrimaryPart = firstPart
-                end)
-            end
-        end
-
-        if model.PrimaryPart then
-            local ok, err = pcall(function()
-                model:SetPrimaryPartCFrame(cf)
-            end)
-            if not ok then
-                warn("[x1M] SetPrimaryPartCFrame error:", err)
-            end
-            return ok
-        end
-    end
-
-    return false
-end
-
-local function targetFinalCFrame(targetPart)
-    -- Original final position was CFrame.new(-21, 3, 2101): identity rotation,
-    -- with the car center roughly 2.5 studs above the strip surface.
-    local p = targetPart.Position
-    local y = p.Y + (targetPart.Size.Y * 0.5) + 2.5
-    return CFrame.new(p.X, y, p.Z)
-end
-
-local function fireOpenBoxes()
-    local remote = Remotes:FindFirstChild("OpenBoxClick")
-    if not remote then
-        return
-    end
-
-    -- Exact count observed in the original LastZone cycle.
-    for _ = 1, 10 do
-        remote:FireServer()
+    -- Обновляем ориентацию (смотрим в направлении движения)
+    if moveDirection.Magnitude > 0.1 then
+        local lookCFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + moveDirection)
+        bodyGyro.CFrame = lookCFrame
     end
 end
 
-local function LastZone()
-    while _G.LastZone do
-        task.wait() -- original cycle yields here
+-- Главный цикл (сборка)
+local connection = game:GetService("RunService").Heartbeat:Connect(function()
+    updateCoordDisplay()
+    updateFly()
+end)
 
-        -- Resolve target BEFORE moving the player. If x1M cannot be found,
-        -- do not keep jerking the player around CarSpawn.
-        local targetPart = findTargetPart()
-        if not targetPart then
-            warn("[x1M] x1,000,000 strip not found. Player was NOT moved.")
-            task.wait(2)
-            continue
-        end
-
-        local progetto = getProgetto()
-        local carSpawn = progetto and progetto:FindFirstChild("CarSpawn")
-        local jumpCar = progetto and progetto:FindFirstChild("JumpCar")
-
-        local character = LocalPlayer.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-
-        if not (root and carSpawn and carSpawn:IsA("BasePart")) then
-            task.wait(0.5)
-            continue
-        end
-
-        -- ORIGINAL STEP 1
-        root.CFrame = carSpawn.CFrame
-
-        -- ORIGINAL DELAY (this was 1 second, not 0.25)
-        task.wait(1)
-
-        if not _G.LastZone then
-            break
-        end
-
-        -- ORIGINAL lookup: <player name>_Auto
-        local car = findAutoCar()
-        if not car then
-            warn("[x1M] Waiting for car:", LocalPlayer.Name .. "_Auto")
-            task.wait(0.5)
-            continue
-        end
-
-        -- ORIGINAL STEP 2: car -> JumpCar.CFrame
-        if jumpCar and jumpCar:IsA("BasePart") then
-            setModelCFrame(car, jumpCar.CFrame)
-        else
-            warn("[x1M] Progetto.JumpCar not found")
-            task.wait(0.5)
-            continue
-        end
-
-        task.wait(0.2)
-
-        -- ORIGINAL STEP 3 was Checkpoints["68"].
-        -- We use the checkpoint nearest to the x1M strip instead.
-        local checkpoint = findNearestCheckpoint(targetPart)
-        local checkpointCF = getObjectCFrame(checkpoint)
-
-        if checkpointCF then
-            setModelCFrame(car, checkpointCF)
-        else
-            -- Safe fallback: use target strip itself rather than an unrelated checkpoint.
-            setModelCFrame(car, targetFinalCFrame(targetPart))
-        end
-
-        task.wait(0.2)
-
-        -- ORIGINAL STEP 4 was CFrame.new(-21, 3, 2101).
-        -- Same operation, but coordinates come from the x1M strip.
-        setModelCFrame(car, targetFinalCFrame(targetPart))
-
-        task.wait(1)
-
-        -- ORIGINAL reward/reset step.
-        fireOpenBoxes()
-
-        task.wait()
+-- Обработка смены персонажа (респавн)
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    humanoid = character:WaitForChild("Humanoid")
+    if flyEnabled then
+        disableFly()
+        flyEnabled = false
+        flyBtn.Text = "ВКЛ"
+        flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
     end
-end
+end)
 
-local function Equip()
-    while _G.Equip do
-        local remote = Remotes:FindFirstChild("EquipBestInventory")
-        if remote then
-            remote:FireServer()
+-- Отключаем при остановке скрипта
+pcall(function()
+    screenGui.AncestryChanged:Connect(function()
+        if not screenGui.Parent then
+            if flyEnabled then disableFly() end
+            connection:Disconnect()
         end
-        task.wait(2)
-    end
-end
+    end)
+end)
 
-Window:AddToggle({
-    text = "Instant LastZone [x1M ORIGINAL]",
-    flag = "toggle_x1m_original",
-    state = false,
-    callback = function(value)
-        _G.LastZone = value
-        print("LastZone x1M:", value)
-        if value then
-            task.spawn(LastZone)
-        end
-    end,
-})
-
-Window:AddToggle({
-    text = "Equip Best",
-    flag = "toggle_equip",
-    state = false,
-    callback = function(value)
-        _G.Equip = value
-        print("Equip:", value)
-        if value then
-            task.spawn(Equip)
-        end
-    end,
-})
-
-Window:AddLabel({
-    text = "Target: x1,000,000",
-})
-
-Window:AddLabel({
-    text = "Original cycle restored",
-})
-
-Window:AddLabel({
-    text = "YouTube: Tora IsMe",
-})
-
-Library:Init()
+print("✅ Fly + Coord скрипт загружен!")
+print("Используйте WASD + Пробел/Shift для управления.")
+print("Координаты обновляются в меню.")
