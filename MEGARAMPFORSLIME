@@ -38,18 +38,20 @@ end
 
 
 -- ============================================================
--- UI TEXT PATCH + ANTI-AFK
--- IMPORTANT: original AutoFarm / Equip Best controls are untouched.
+-- RUSSIAN TEXT PATCH + HIDDEN ANTI-AFK
+-- Original AutoFarm / Equip Best buttons and callbacks are NOT modified.
 -- ============================================================
 
 do
     local Players = game:GetService("Players")
     local CoreGui = game:GetService("CoreGui")
     local VirtualUser = game:GetService("VirtualUser")
+
     local LocalPlayer = Players.LocalPlayer
 
-    -- Anti-AFK is always ON and works independently from AutoFarm.
-    -- Reuse one connection if the script is executed again.
+    -- ----------------------------
+    -- Anti-AFK (always ON)
+    -- ----------------------------
     if _G.__MEGARAMP_ANTI_AFK_CONNECTION then
         pcall(function()
             _G.__MEGARAMP_ANTI_AFK_CONNECTION:Disconnect()
@@ -60,75 +62,109 @@ do
     _G.__MEGARAMP_ANTI_AFK_CONNECTION = LocalPlayer.Idled:Connect(function()
         pcall(function()
             VirtualUser:CaptureController()
-            VirtualUser:Button2Down(
-                Vector2.new(0, 0),
-                workspace.CurrentCamera and workspace.CurrentCamera.CFrame or CFrame.new()
-            )
+
+            local camera = workspace.CurrentCamera
+            local cf = camera and camera.CFrame or CFrame.new()
+
+            VirtualUser:Button2Down(Vector2.new(0, 0), cf)
             task.wait(0.1)
-            VirtualUser:Button2Up(
-                Vector2.new(0, 0),
-                workspace.CurrentCamera and workspace.CurrentCamera.CFrame or CFrame.new()
-            )
+            VirtualUser:Button2Up(Vector2.new(0, 0), cf)
         end)
     end)
 
-    -- Only replace visible text AFTER the original Tora UI appears.
-    -- No GuiButton/InputBegan/callback/event is changed.
-    task.spawn(function()
-        local gui
-        local timeout = os.clock() + 15
-
-        repeat
-            task.wait(0.1)
-            gui = CoreGui:FindFirstChild("ToraScript")
-        until gui or os.clock() >= timeout
-
-        if not gui then
-            warn("[MEGA RAMP] ToraScript GUI not found for Russian text patch.")
+    -- ----------------------------
+    -- Patch ONLY visible text
+    -- ----------------------------
+    local function patchTextObject(obj)
+        if not (obj:IsA("TextLabel") or obj:IsA("TextButton")) then
             return
         end
 
-        local function patchText(obj)
-            if not (obj:IsA("TextLabel") or obj:IsA("TextButton")) then
-                return
-            end
+        local txt = tostring(obj.Text or "")
 
-            local current = tostring(obj.Text or "")
+        if txt == "Instant LastZone" then
+            obj.Text = "Автофарм последней зоны"
 
-            if current == "Instant LastZone" then
-                obj.Text = "Автофарм последней зоны"
+        elseif txt == "Equip Best" then
+            obj.Text = "Надеть лучшее"
 
-            elseif current == "Equip Best" then
-                obj.Text = "Надеть лучшее"
+        elseif string.find(txt, "YouTube", 1, true) then
+            -- Remove YouTube/footer text completely.
+            obj.Text = ""
+            obj.Visible = false
+        end
+    end
 
-            elseif string.find(current, "YouTube", 1, true) then
-                -- Reuse the footer only as a non-interactive AFK status.
-                obj.Text = "Анти-АФК: ВКЛ"
-            end
+    local function patchGui(gui)
+        if not gui or gui.Name ~= "ToraScript" then
+            return
         end
 
+        -- Patch current descendants.
         for _, obj in ipairs(gui:GetDescendants()) do
-            patchText(obj)
+            patchTextObject(obj)
         end
 
-        -- Also patch any text objects Tora may add shortly after Init().
-        local addedConnection
-        addedConnection = gui.DescendantAdded:Connect(function(obj)
+        -- Tora creates some descendants after the ScreenGui is parented.
+        local conn
+        conn = gui.DescendantAdded:Connect(function(obj)
             task.defer(function()
                 if obj and obj.Parent then
-                    patchText(obj)
+                    patchTextObject(obj)
                 end
             end)
         end)
 
-        -- We only need this watcher during UI initialization.
-        task.delay(5, function()
-            if addedConnection then
-                addedConnection:Disconnect()
+        -- Poll briefly as a second safeguard during Init().
+        task.spawn(function()
+            for _ = 1, 60 do
+                if not gui.Parent then
+                    break
+                end
+
+                for _, obj in ipairs(gui:GetDescendants()) do
+                    patchTextObject(obj)
+                end
+
+                task.wait(0.1)
+            end
+
+            if conn then
+                conn:Disconnect()
             end
         end)
 
-        print("[MEGA RAMP] Russian UI patch loaded | Anti-AFK: ON")
+        print("[MEGA RAMP] Русский интерфейс применён | Anti-AFK: ON")
+    end
+
+    -- IMPORTANT:
+    -- The original VM may destroy an old ToraScript and create a new one.
+    -- Listen for the NEW GUI instead of patching the old copy too early.
+    local oldGui = CoreGui:FindFirstChild("ToraScript")
+
+    local childConn
+    childConn = CoreGui.ChildAdded:Connect(function(child)
+        if child.Name == "ToraScript" and child ~= oldGui then
+            task.defer(function()
+                task.wait(0.05)
+                patchGui(child)
+            end)
+        end
+    end)
+
+    -- Fallback: after the original has had time to recreate its GUI,
+    -- patch whichever ToraScript currently exists.
+    task.delay(1.5, function()
+        local current = CoreGui:FindFirstChild("ToraScript")
+        if current then
+            patchGui(current)
+        end
+
+        task.delay(5, function()
+            if childConn then
+                childConn:Disconnect()
+            end
+        end)
     end)
 end
 
