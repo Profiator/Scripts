@@ -1,7 +1,6 @@
 -- ================================================================
--- ПОЛНЫЙ АВТОМАТИЧЕСКИЙ ДЕОБФУСКАТОР С ГРАФИЧЕСКИМ ОКНОМ В ИГРЕ
--- Версия 1.0 (для XENO и других инжекторов)
--- После запуска появится окно с расшифрованным кодом.
+-- УЛЬТИМАТИВНЫЙ ДЕОБФУСКАТОР С ГАРАНТИРОВАННЫМ ОКНОМ
+-- Версия 2.0 (для XENO и других инжекторов)
 -- ================================================================
 
 -- 1. Перехватываем стандартные функции
@@ -103,164 +102,204 @@ oldPrint("=== ВЫПОЛНЕНИЕ ЗАВЕРШЕНО ===")
 local fullOutput = table.concat(outputBuffer, "\n")
 _G.DECODED_OUTPUT = fullOutput
 
--- 5. Создаём GUI (окно поверх игры)
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DeobfuscatorGUI"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-
--- Фоновое затемнение (опционально)
-local background = Instance.new("Frame")
-background.Size = UDim2.new(1, 0, 1, 0)
-background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-background.BackgroundTransparency = 0.5
-background.Parent = screenGui
-
--- Основное окно
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 800, 0, 600)
-mainFrame.Position = UDim2.new(0.5, -400, 0.5, -300)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-mainFrame.BorderSizePixel = 2
-mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
-mainFrame.Parent = screenGui
-mainFrame.Active = true
-mainFrame.Draggable = true
-
--- Заголовок
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-title.Text = "🔓 РАСШИФРОВАННЫЙ КОД"
-title.TextColor3 = Color3.fromRGB(0, 0, 0)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.Parent = mainFrame
-
--- Кнопка закрытия
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 40, 0, 40)
-closeBtn.Position = UDim2.new(1, -45, 0, 0)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextScaled = true
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.Parent = mainFrame
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
--- Кнопка копирования
-local copyBtn = Instance.new("TextButton")
-copyBtn.Size = UDim2.new(0, 120, 0, 30)
-copyBtn.Position = UDim2.new(0, 20, 0, 50)
-copyBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-copyBtn.Text = "📋 КОПИРОВАТЬ"
-copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-copyBtn.TextScaled = true
-copyBtn.Font = Enum.Font.GothamBold
-copyBtn.Parent = mainFrame
-copyBtn.MouseButton1Click:Connect(function()
-    local success, err = pcall(function()
-        setclipboard(fullOutput)
-    end)
-    if success then
-        copyBtn.Text = "✅ СКОПИРОВАНО!"
-        task.wait(2)
-        copyBtn.Text = "📋 КОПИРОВАТЬ"
-    else
-        copyBtn.Text = "❌ ОШИБКА"
-        task.wait(2)
-        copyBtn.Text = "📋 КОПИРОВАТЬ"
+-- 5. ГАРАНТИРОВАННОЕ СОЗДАНИЕ GUI
+oldPrint("=== СОЗДАНИЕ GUI ===")
+local function createGUI()
+    -- Ждём, пока игрок появится
+    local player = game:GetService("Players").LocalPlayer
+    if not player then
+        oldPrint("❌ LocalPlayer не найден, ждём...")
+        task.wait(1)
+        return false
     end
-end)
 
--- Кнопка сохранения в файл
-local saveBtn = Instance.new("TextButton")
-saveBtn.Size = UDim2.new(0, 150, 0, 30)
-saveBtn.Position = UDim2.new(0, 160, 0, 50)
-saveBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
-saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
-saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-saveBtn.TextScaled = true
-saveBtn.Font = Enum.Font.GothamBold
-saveBtn.Parent = mainFrame
-saveBtn.MouseButton1Click:Connect(function()
-    local success, err = pcall(function()
-        writefile("123/decoded_script.lua", fullOutput)
-    end)
-    if success then
-        saveBtn.Text = "✅ СОХРАНЕНО!"
-        task.wait(2)
-        saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
-    else
-        saveBtn.Text = "❌ ОШИБКА"
-        task.wait(2)
-        saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+    -- Ждём PlayerGui
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if not playerGui then
+        oldPrint("❌ PlayerGui не найден, ждём...")
+        task.wait(1)
+        return false
     end
-end)
 
--- Кнопка "Закрыть и удалить GUI"
-local closeAllBtn = Instance.new("TextButton")
-closeAllBtn.Size = UDim2.new(0, 150, 0, 30)
-closeAllBtn.Position = UDim2.new(1, -170, 0, 50)
-closeAllBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-closeAllBtn.Text = "❌ ЗАКРЫТЬ ОКНО"
-closeAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeAllBtn.TextScaled = true
-closeAllBtn.Font = Enum.Font.GothamBold
-closeAllBtn.Parent = mainFrame
-closeAllBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
+    -- Создаём ScreenGui
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "DeobfuscatorGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
 
--- Область с прокруткой для текста
-local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, -20, 1, -110)
-scrollFrame.Position = UDim2.new(0, 10, 0, 95)
-scrollFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-scrollFrame.BorderSizePixel = 1
-scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-scrollFrame.Parent = mainFrame
-scrollFrame.ScrollBarThickness = 12
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    -- Проверяем, создалось ли
+    if not screenGui.Parent then
+        oldPrint("❌ Не удалось прикрепить ScreenGui к PlayerGui")
+        return false
+    end
 
--- Текстовое поле внутри скролл-фрейма
-local textLabel = Instance.new("TextLabel")
-textLabel.Size = UDim2.new(1, -10, 0, 0)
-textLabel.BackgroundTransparency = 1
-textLabel.Text = fullOutput
-textLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
-textLabel.TextXAlignment = Enum.TextXAlignment.Left
-textLabel.TextYAlignment = Enum.TextYAlignment.Top
-textLabel.TextWrapped = true
-textLabel.TextScaled = false
-textLabel.Font = Enum.Font.Code
-textLabel.Parent = scrollFrame
+    oldPrint("✅ ScreenGui создан и прикреплён")
 
--- Автоподбор высоты текста
-local function updateTextHeight()
-    local lineCount = #fullOutput:split("\n")
-    local lineHeight = 16
-    local height = lineCount * lineHeight + 20
-    textLabel.Size = UDim2.new(1, -10, 0, height)
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, height)
+    -- Основное окно
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 800, 0, 600)
+    mainFrame.Position = UDim2.new(0.5, -400, 0.5, -300)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.BorderSizePixel = 2
+    mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
+    mainFrame.Parent = screenGui
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+
+    -- Заголовок
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    title.Text = "🔓 РАСШИФРОВАННЫЙ КОД"
+    title.TextColor3 = Color3.fromRGB(0, 0, 0)
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBold
+    title.Parent = mainFrame
+
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 40, 0, 40)
+    closeBtn.Position = UDim2.new(1, -45, 0, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextScaled = true
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Parent = mainFrame
+    closeBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+    end)
+
+    -- Кнопка копирования
+    local copyBtn = Instance.new("TextButton")
+    copyBtn.Size = UDim2.new(0, 120, 0, 30)
+    copyBtn.Position = UDim2.new(0, 20, 0, 50)
+    copyBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+    copyBtn.Text = "📋 КОПИРОВАТЬ"
+    copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    copyBtn.TextScaled = true
+    copyBtn.Font = Enum.Font.GothamBold
+    copyBtn.Parent = mainFrame
+    copyBtn.MouseButton1Click:Connect(function()
+        local success, err = pcall(function()
+            setclipboard(fullOutput)
+        end)
+        if success then
+            copyBtn.Text = "✅ СКОПИРОВАНО!"
+            task.wait(2)
+            copyBtn.Text = "📋 КОПИРОВАТЬ"
+        else
+            copyBtn.Text = "❌ ОШИБКА"
+            task.wait(2)
+            copyBtn.Text = "📋 КОПИРОВАТЬ"
+        end
+    end)
+
+    -- Кнопка сохранения в файл
+    local saveBtn = Instance.new("TextButton")
+    saveBtn.Size = UDim2.new(0, 150, 0, 30)
+    saveBtn.Position = UDim2.new(0, 160, 0, 50)
+    saveBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
+    saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+    saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    saveBtn.TextScaled = true
+    saveBtn.Font = Enum.Font.GothamBold
+    saveBtn.Parent = mainFrame
+    saveBtn.MouseButton1Click:Connect(function()
+        local success, err = pcall(function()
+            writefile("123/decoded_script.lua", fullOutput)
+        end)
+        if success then
+            saveBtn.Text = "✅ СОХРАНЕНО!"
+            task.wait(2)
+            saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+        else
+            saveBtn.Text = "❌ ОШИБКА"
+            task.wait(2)
+            saveBtn.Text = "💾 СОХРАНИТЬ В ФАЙЛ"
+        end
+    end)
+
+    -- Кнопка закрыть окно
+    local closeAllBtn = Instance.new("TextButton")
+    closeAllBtn.Size = UDim2.new(0, 150, 0, 30)
+    closeAllBtn.Position = UDim2.new(1, -170, 0, 50)
+    closeAllBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+    closeAllBtn.Text = "❌ ЗАКРЫТЬ ОКНО"
+    closeAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeAllBtn.TextScaled = true
+    closeAllBtn.Font = Enum.Font.GothamBold
+    closeAllBtn.Parent = mainFrame
+    closeAllBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+    end)
+
+    -- Область с прокруткой
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Size = UDim2.new(1, -20, 1, -110)
+    scrollFrame.Position = UDim2.new(0, 10, 0, 95)
+    scrollFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    scrollFrame.BorderSizePixel = 1
+    scrollFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+    scrollFrame.Parent = mainFrame
+    scrollFrame.ScrollBarThickness = 12
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, -10, 0, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = fullOutput
+    textLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
+    textLabel.TextXAlignment = Enum.TextXAlignment.Left
+    textLabel.TextYAlignment = Enum.TextYAlignment.Top
+    textLabel.TextWrapped = true
+    textLabel.TextScaled = false
+    textLabel.Font = Enum.Font.Code
+    textLabel.Parent = scrollFrame
+
+    -- Подгоняем высоту
+    local function updateTextHeight()
+        local lines = fullOutput:split("\n")
+        local lineCount = #lines
+        local lineHeight = 16
+        local height = lineCount * lineHeight + 20
+        textLabel.Size = UDim2.new(1, -10, 0, height)
+        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, height)
+    end
+    updateTextHeight()
+
+    -- Информационная строка
+    local infoLabel = Instance.new("TextLabel")
+    infoLabel.Size = UDim2.new(1, 0, 0, 20)
+    infoLabel.Position = UDim2.new(0, 0, 1, -25)
+    infoLabel.BackgroundTransparency = 1
+    infoLabel.Text = "Расшифровка завершена. Код доступен для копирования и сохранения."
+    infoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    infoLabel.TextSize = 12
+    infoLabel.Font = Enum.Font.Gotham
+    infoLabel.Parent = mainFrame
+
+    oldPrint("✅ GUI успешно создан и отображается в игре!")
+    return true
 end
-updateTextHeight()
 
--- Информационная строка внизу
-local infoLabel = Instance.new("TextLabel")
-infoLabel.Size = UDim2.new(1, 0, 0, 20)
-infoLabel.Position = UDim2.new(0, 0, 1, -25)
-infoLabel.BackgroundTransparency = 1
-infoLabel.Text = "Расшифровка завершена. Код доступен для копирования и сохранения."
-infoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-infoLabel.TextSize = 12
-infoLabel.Font = Enum.Font.Gotham
-infoLabel.Parent = mainFrame
+-- Пытаемся создать GUI с повторными попытками
+local maxAttempts = 10
+local attempts = 0
+local guiCreated = false
+while not guiCreated and attempts < maxAttempts do
+    attempts = attempts + 1
+    oldPrint("Попытка создать GUI #" .. attempts)
+    guiCreated = createGUI()
+    if not guiCreated then
+        task.wait(1)
+    end
+end
 
--- Уведомление в консоль
-print("✅ Деобфускатор с GUI запущен. Окно отображается поверх игры.")
-print("📁 Файл будет сохранён в 123/decoded_script.lua при нажатии кнопки.")
-print("📋 Итоговый код также доступен в _G.DECODED_OUTPUT")
+if guiCreated then
+    oldPrint("✅ Деобфускатор с GUI успешно загружен!")
+else
+    oldPrint("❌ Не удалось создать GUI после " .. maxAttempts .. " попыток.")
+    oldPrint("Но полный расшифрованный код сохранён в _G.DECODED_OUTPUT")
+    oldPrint("Используй print(_G.DECODED_OUTPUT) для вывода в консоль.")
+end
